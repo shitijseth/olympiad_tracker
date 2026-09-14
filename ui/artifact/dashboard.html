@@ -334,7 +334,7 @@
       <div class="page-head"><div><h1>Board medal forecast</h1>
         <div class="meta">Per-board tournament-performance-rating leaderboard (Article 4.10.3 · min. 8 games modelled)</div></div>
       </div>
-      <div class="grid-tiles" id="boards-grid" style="grid-template-columns:repeat(auto-fit, minmax(280px,1fr));"></div>
+      <div id="boards-grid" style="display:flex; flex-direction:column; gap:22px;"></div>
     </section>
 
     <!-- ============ FIELD STATS ============ -->
@@ -683,20 +683,31 @@
     grid.innerHTML = "";
     const names = { "1": "Board 1", "2": "Board 2", "3": "Board 3", "4": "Board 4" };
     Object.keys(names).forEach(k => {
-      const rows = (d.boards[k] || []).slice(0, 8);
+      const rows = (d.boards[k] || []).slice(0, 15);
       const card = el("div", { class: "panel", style: "margin-bottom:0;" },
-        el("div", { class: "panel-head" }, el("h2", {}, names[k])));
-      const list = el("table", {}, el("tbody"));
-      const tb = list.querySelector("tbody");
+        el("div", { class: "panel-head" },
+          el("div", {}, el("h2", {}, names[k]), el("div", { class: "panel-sub" }, "Ranked by simulated tournament performance rating")),
+          el("div", { class: "meta" }, rows.length ? `Top ${rows.length}` : "")));
+      const table = el("table", {},
+        el("thead", {}, el("tr", {},
+          el("th", { style: "width:34px;" }, "#"),
+          el("th", {}, "Player"),
+          el("th", {}, "Federation"),
+          el("th", { class: "num" }, "TPR"),
+          el("th", { class: "num" }, "Medal chance"),
+        )),
+        el("tbody"));
+      const tb = table.querySelector("tbody");
       rows.forEach((p, i) => {
         tb.append(el("tr", {},
-          el("td", { class: "rank-cell", style: "width:24px;" }, i + 1),
-          el("td", {}, el("span", { class: "fed-chip" }, p.fed), el("span", { class: "team-name" }, p.name)),
-          el("td", { class: "num" }, p.tpr),
-          el("td", { class: "num" }, fmtPct(p.pMedal))));
+          el("td", { class: "rank-cell" }, "#" + (i + 1)),
+          el("td", {}, el("span", { class: "team-name" }, p.name)),
+          el("td", {}, el("span", { class: "fed-chip" }, p.fed), p.team),
+          el("td", { class: "num" }, String(p.tpr)),
+          el("td", { class: "num" }, medalCell(p.pMedal))));
       });
       if (!rows.length) card.append(el("p", { class: "empty-note" }, "Not enough simulated 8+ game samples yet."));
-      else card.append(list);
+      else card.append(el("div", { class: "table-wrap" }, table));
       grid.append(card);
     });
   }
