@@ -132,6 +132,15 @@ against the real 2026 Open field for 150 auto-play trials, reproducing the
 Python engine's aggregate medal probabilities closely (e.g. USA 38.7% vs
 41.1% any-medal) — confirming the two independent implementations agree.
 
+The dashboard's actual DOM/UI (not just the extracted engine) is validated
+with Playwright — `scripts/validate_dashboard_ui.py` serves `dashboard.html`
+locally with a mock of the artifact `db` capability (fed the real exported
+forecast JSON) and drives headless Chromium through every tab and a full
+11-round Simulate play-through, failing on any uncaught JS error. This
+caught a real bug (`Element.append()` returning `undefined`, not the
+appended node, silently breaking the Field Stats federation chart on every
+render) before it reached the published artifact.
+
 ## Known simplifications
 
 - **Pairing engine** (`chessolympiad/pairing/swiss_team.py`): a fast,
@@ -168,6 +177,10 @@ python -m chessolympiad.report.export_artifact_data   # writes data/artifact_exp
 # once the event is underway (from 16 Sep 2026):
 python -m chessolympiad.cli live-update open
 python -m chessolympiad.cli live-update women
+
+# validate the dashboard's actual UI end-to-end (needs the artifact export above):
+playwright install chromium   # one-time
+python scripts/validate_dashboard_ui.py
 ```
 
 Reports land in `reports/{tournament_id}_forecast.{md,csv}`. The dashboard

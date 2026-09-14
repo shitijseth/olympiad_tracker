@@ -734,7 +734,8 @@
     const fsvg = svgEl("svg", { viewBox: `0 0 ${fw} ${fh}`, width: "100%", height: fh });
     feds.forEach(([fed, n], i) => {
       const y = i * rowH + 4;
-      fsvg.append(svgEl("text", { x: 0, y: y + 12, "font-size": 11, fill: "var(--muted)", "font-family": "IBM Plex Mono" })).textContent = fed;
+      const fedLab = svgEl("text", { x: 0, y: y + 12, "font-size": 11, fill: "var(--muted)", "font-family": "IBM Plex Mono" });
+      fedLab.textContent = fed; fsvg.append(fedLab);
       const barMax = fw - 140; const bw2 = (n / maxN) * barMax;
       fsvg.append(svgEl("rect", { x: 46, y, width: bw2, height: 14, fill: "var(--accent)", rx: 3 }));
       const lab = svgEl("text", { x: 46 + bw2 + 6, y: y + 12, "font-size": 11, fill: "var(--text)", "font-family": "IBM Plex Mono" });
