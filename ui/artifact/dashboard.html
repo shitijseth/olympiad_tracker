@@ -1,0 +1,1234 @@
+<title>Samarkand 2026</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Palette matched to the official 46th Olympiad site (chessolympiad2026.fide.com):
+     deep navy #1D1E3E, gold/ochre #AD8C49 & #C3A35E, warm charcoal #221E20,
+     sand #E7E5DF, taupe #8D7663 -- and their display face, Host Grotesk. */
+  :root{
+    --ground:#E7E5DF; --surface:#FFFFFF; --surface-2:#F1EFE9;
+    --line:#D9D3C4; --text:#221E20; --muted:#79705F;
+    --accent:#AD8C49; --accent-strong:#8A6F39; --accent-soft:#F2E8D2;
+    --gold:#AD8C49; --silver:#8B877E; --bronze:#A9552A;
+    --navy:#1D1E3E;
+    --shadow: 0 1px 2px rgba(34,30,32,.07), 0 8px 24px rgba(34,30,32,.07);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#1D1E3E; --surface:#262848; --surface-2:#2F3157;
+      --line:#3E4066; --text:#EDEAE2; --muted:#A39D8E;
+      --accent:#C3A35E; --accent-strong:#E0C27E; --accent-soft:#33355C;
+      --gold:#D4B36A; --silver:#B7B7B0; --bronze:#C97D4B;
+      --navy:#141530;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#1D1E3E; --surface:#262848; --surface-2:#2F3157;
+    --line:#3E4066; --text:#EDEAE2; --muted:#A39D8E;
+    --accent:#C3A35E; --accent-strong:#E0C27E; --accent-soft:#33355C;
+    --gold:#D4B36A; --silver:#B7B7B0; --bronze:#C97D4B;
+    --navy:#141530;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--ground); color:var(--text);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:14px; line-height:1.5;
+  }
+  h1,h2,h3,.display{
+    font-family:"Host Grotesk", "IBM Plex Sans", sans-serif; text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .num, .tabular{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+  a{ color:var(--accent-strong); }
+  ::selection{ background:var(--accent-soft); }
+
+  .app{ display:flex; min-height:100vh; }
+
+  /* ---------- sidebar ---------- */
+  .rail{
+    width:248px; flex:none; background:var(--surface);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column; gap:22px;
+    padding:24px 18px; position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .brand{ display:flex; flex-direction:column; gap:4px; }
+  .brand-mark{
+    width:36px; height:36px; border-radius:9px;
+    background:linear-gradient(155deg, var(--accent), var(--accent-strong));
+    display:flex; align-items:center; justify-content:center;
+    font-family:"Host Grotesk"; font-weight:700; color:var(--navy); font-size:15px;
+  }
+  .brand-name{ font-family:"Host Grotesk"; font-weight:600; font-size:16.5px; margin-top:8px; }
+  .brand-sub{ color:var(--muted); font-size:12px; }
+
+  .section-switch{ display:flex; flex-direction:column; gap:6px; }
+  .rail-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); font-weight:600; margin-bottom:2px;}
+  .switch-btn{
+    text-align:left; border:1px solid transparent; background:transparent; color:var(--text);
+    padding:9px 11px; border-radius:10px; font:inherit; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .switch-btn:hover{ background:var(--surface-2); }
+  .switch-btn.active{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
+  .switch-btn .n{ font-family:"IBM Plex Mono"; font-size:11px; color:var(--muted); }
+  .switch-btn.active .n{ color:var(--accent-strong); }
+
+  .rail-card{
+    border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--ground);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .status-row{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
+  .dot.pulse{ animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);} 50%{ box-shadow:0 0 0 5px transparent; } }
+  .countdown{ font-family:"IBM Plex Mono"; font-size:22px; font-weight:600; letter-spacing:-0.02em; }
+  .countdown-label{ font-size:11px; color:var(--muted); }
+
+  .nav{ display:flex; flex-direction:column; gap:2px; margin-top:auto; }
+  .nav-btn{
+    text-align:left; border:none; background:transparent; color:var(--muted); font:inherit; font-weight:500;
+    padding:8px 10px; border-radius:9px; cursor:pointer; font-size:13px;
+  }
+  .nav-btn:hover{ background:var(--surface-2); color:var(--text); }
+  .nav-btn.active{ color:var(--text); background:var(--surface-2); }
+
+  /* ---------- main ---------- */
+  .main{ flex:1; min-width:0; padding:30px 36px 60px; max-width:1280px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .page-head{ display:flex; align-items:baseline; justify-content:space-between; gap:20px; margin-bottom:22px; flex-wrap:wrap;}
+  .page-head h1{ font-size:26px; margin:0; }
+  .page-head .meta{ color:var(--muted); font-size:12.5px; }
+
+  .grid-tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .tile{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px;
+    display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow);
+  }
+  .tile .label{ font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600; }
+  .tile .value{ font-family:"IBM Plex Mono"; font-size:22px; font-weight:600; }
+  .tile .sub{ font-size:11.5px; color:var(--muted); }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px 22px; margin-bottom:22px; box-shadow:var(--shadow);
+  }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+  .panel-head h2{ font-size:15px; margin:0; font-weight:600; font-family:"IBM Plex Sans"; letter-spacing:0; }
+  .panel-sub{ color:var(--muted); font-size:12px; margin-top:2px; }
+
+  .controls{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  select, input[type=search]{
+    font:inherit; font-size:12.5px; background:var(--ground); color:var(--text);
+    border:1px solid var(--line); border-radius:8px; padding:6px 10px;
+  }
+  input[type=search]{ min-width:180px; }
+  input[type=range]{ accent-color:var(--accent); }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+      font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none;}
+  th.num, td.num{ text-align:right; font-family:"IBM Plex Mono"; }
+  th:hover{ color:var(--text); }
+  th .arrow{ opacity:.5; margin-left:3px; }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr{ cursor:pointer; }
+  tbody tr:hover{ background:var(--accent-soft); }
+  .table-wrap{ overflow-x:auto; }
+  .rank-cell{ color:var(--muted); font-family:"IBM Plex Mono"; }
+  .team-name{ font-weight:600; }
+  .fed-chip{
+    display:inline-flex; align-items:center; font-family:"IBM Plex Mono"; font-size:10.5px; font-weight:600;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:5px; padding:2px 5px; margin-right:8px;
+    letter-spacing:.02em;
+  }
+  .medal-pill{ display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:99px; font-size:11px; font-weight:600; font-family:"IBM Plex Mono"; }
+  .medal-pill.gold{ background:color-mix(in srgb, var(--gold) 18%, transparent); color:var(--gold); }
+  .medal-pill.silver{ background:color-mix(in srgb, var(--silver) 18%, transparent); color:var(--silver); }
+  .medal-pill.bronze{ background:color-mix(in srgb, var(--bronze) 18%, transparent); color:var(--bronze); }
+  .bar-track{ width:64px; height:6px; border-radius:99px; background:var(--surface-2); overflow:hidden; display:inline-block; vertical-align:middle;}
+  .bar-fill{ height:100%; background:var(--accent); border-radius:99px; }
+
+  .empty-note{ color:var(--muted); font-size:12.5px; padding:14px 0; }
+
+  /* team detail */
+  .team-header{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .team-header h2{ font-size:20px; margin:0; }
+  .roster-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:10px; }
+  .roster-card{ border:1px solid var(--line); border-radius:11px; padding:11px 13px; background:var(--ground); display:flex; flex-direction:column; gap:3px;}
+  .roster-card .board-no{ font-family:"IBM Plex Mono"; font-size:10.5px; color:var(--accent-strong); font-weight:600; text-transform:uppercase; letter-spacing:.05em;}
+  .roster-card .p-name{ font-weight:600; font-size:13.5px; }
+  .roster-card .p-rtg{ font-family:"IBM Plex Mono"; color:var(--muted); font-size:12px; }
+
+  .searchpick{ position:relative; }
+  .searchpick .results{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; box-shadow:var(--shadow); max-height:280px; overflow-y:auto; z-index:5; display:none;
+  }
+  .searchpick .results.open{ display:block; }
+  .result-row{ padding:8px 12px; cursor:pointer; font-size:13px; display:flex; justify-content:space-between; gap:10px;}
+  .result-row:hover{ background:var(--accent-soft); }
+
+  footer.credit{ color:var(--muted); font-size:11.5px; margin-top:30px; }
+
+  /* ---------- simulator ---------- */
+  .btn{
+    font:inherit; font-size:12.5px; font-weight:600; border-radius:9px; padding:8px 14px; cursor:pointer;
+    border:1px solid var(--line); background:var(--surface); color:var(--text);
+  }
+  .btn:hover{ background:var(--surface-2); }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--navy); }
+  .btn.primary:hover{ filter:brightness(1.06); }
+  .btn.ghost{ background:transparent; border-color:transparent; color:var(--muted); }
+  .btn.ghost:hover{ color:var(--text); background:var(--surface-2); }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  .round-banner{ display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .round-banner .round-no{ font-family:"IBM Plex Mono"; font-size:28px; font-weight:600; }
+  .match-card{ border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px; background:var(--surface); }
+  .match-top{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .match-teams{ flex:1; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600; font-size:13.5px; min-width:200px;}
+  .match-teams .vs{ color:var(--muted); font-weight:400; font-size:11.5px; }
+  .match-score{ font-family:"IBM Plex Mono"; font-weight:600; font-size:15px; min-width:70px; text-align:center; }
+  .match-score.overridden{ color:var(--accent-strong); }
+  .bye-card{ color:var(--muted); font-style:italic; }
+  .board-rows{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); display:none; }
+  .board-rows.open{ display:block; }
+  .board-row{ display:grid; grid-template-columns:56px 1fr 110px 1fr 56px; align-items:center; gap:8px; padding:5px 0; font-size:12.5px; }
+  .board-row .side{ display:flex; flex-direction:column; }
+  .board-row .side.right{ align-items:flex-end; text-align:right; }
+  .board-row .pname{ font-weight:600; }
+  .board-row .prtg{ font-family:"IBM Plex Mono"; color:var(--muted); font-size:11px; }
+  .board-row select{ text-align:center; }
+  .override-row{ display:flex; gap:6px; margin-top:8px; }
+  .override-row .btn{ padding:5px 10px; font-size:11.5px; flex:1; }
+  .sub-flag{ font-size:10px; color:var(--accent-strong); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+
+  .standings-table td, .standings-table th{ padding:6px 10px; }
+  .standings-table tr.medal-gold td:first-child{ box-shadow:inset 3px 0 0 var(--gold); }
+  .standings-table tr.medal-silver td:first-child{ box-shadow:inset 3px 0 0 var(--silver); }
+  .standings-table tr.medal-bronze td:first-child{ box-shadow:inset 3px 0 0 var(--bronze); }
+  .round-stats{ display:flex; gap:18px; flex-wrap:wrap; margin-bottom:16px; }
+  .round-stat{ font-size:12.5px; color:var(--muted); }
+  .round-stat b{ color:var(--text); font-family:"IBM Plex Mono"; }
+
+  @media (max-width: 860px){
+    .app{ flex-direction:column; }
+    .rail{ position:relative; height:auto; width:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
+    .nav{ margin-top:0; flex-direction:row; flex-wrap:wrap; }
+    .main{ padding:20px; }
+  }
+  [hidden]{ display:none !important; }
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">S26</div>
+      <div class="brand-name">Samarkand 2026</div>
+      <div class="brand-sub">46th Chess Olympiad forecast</div>
+    </div>
+
+    <div class="section-switch">
+      <div class="rail-label">Section</div>
+      <button class="switch-btn active" data-section="2026-open">Open <span class="n" id="rail-count-open">—</span></button>
+      <button class="switch-btn" data-section="2026-women">Women <span class="n" id="rail-count-women">—</span></button>
+    </div>
+
+    <div class="rail-card">
+      <div class="status-row"><span class="dot pulse" id="live-dot"></span><span id="status-text">Loading live data…</span></div>
+      <div>
+        <div class="countdown" id="countdown">—</div>
+        <div class="countdown-label" id="countdown-label">until Round 1 · 16 Sep 2026</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-btn active" data-view="leaderboard">Leaderboard</button>
+      <button class="nav-btn" data-view="team">Team detail</button>
+      <button class="nav-btn" data-view="boards">Board medals</button>
+      <button class="nav-btn" data-view="stats">Field stats</button>
+      <button class="nav-btn" data-view="simulate">Simulate</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <!-- ============ LEADERBOARD ============ -->
+    <section class="view active" id="view-leaderboard">
+      <div class="page-head">
+        <div>
+          <h1 id="lb-title">46th Chess Olympiad Samarkand 2026 — Open</h1>
+          <div class="meta" id="lb-meta">—</div>
+        </div>
+      </div>
+
+      <div class="grid-tiles" id="lb-tiles"><div class="tile"><div class="label">Loading</div><div class="value">…</div><div class="sub">Fetching live forecast</div></div></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Medal probability</h2>
+            <div class="panel-sub">Share of Monte Carlo simulations ending in each medal, top teams by any-medal chance</div>
+          </div>
+          <div class="controls">
+            <label for="lb-topn" style="color:var(--muted); font-size:12px;">Show</label>
+            <input type="range" id="lb-topn" min="8" max="40" step="4" value="20">
+            <span class="num" id="lb-topn-val" style="font-size:12px; color:var(--muted);">20</span>
+          </div>
+        </div>
+        <div id="chart-medals"><p class="empty-note">Loading medal probability chart…</p></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Full standings forecast</h2>
+            <div class="panel-sub">Click a team for the full breakdown and roster</div>
+          </div>
+          <div class="controls">
+            <input type="search" id="lb-search" placeholder="Search team or federation…">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="lb-table">
+            <thead><tr>
+              <th data-key="rank">#</th>
+              <th data-key="name">Team</th>
+              <th class="num" data-key="rtg">Rating</th>
+              <th class="num" data-key="pGold">Gold</th>
+              <th class="num" data-key="pSilver">Silver</th>
+              <th class="num" data-key="pBronze">Bronze</th>
+              <th class="num" data-key="pAnyMedal">Any medal</th>
+              <th class="num" data-key="pTop8">Top 8</th>
+              <th class="num" data-key="expRank">Exp. rank</th>
+            </tr></thead>
+            <tbody id="lb-tbody"><tr><td colspan="9" class="empty-note">Loading standings…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TEAM DETAIL ============ -->
+    <section class="view" id="view-team">
+      <div class="page-head">
+        <div>
+          <h1>Team detail</h1>
+          <div class="meta">Pick a team from the leaderboard, or search below</div>
+        </div>
+        <div class="searchpick" style="width:280px;">
+          <input type="search" id="team-search" placeholder="Jump to team…">
+          <div class="results" id="team-search-results"></div>
+        </div>
+      </div>
+      <div id="team-detail-body"><p class="empty-note">Select a team to see its forecast, roster, and rank distribution.</p></div>
+    </section>
+
+    <!-- ============ BOARD MEDALS ============ -->
+    <section class="view" id="view-boards">
+      <div class="page-head"><div><h1>Board medal forecast</h1>
+        <div class="meta">Per-board tournament-performance-rating leaderboard (Article 4.10.3 · min. 8 games modelled)</div></div>
+      </div>
+      <div class="grid-tiles" id="boards-grid" style="grid-template-columns:repeat(auto-fit, minmax(280px,1fr));"></div>
+    </section>
+
+    <!-- ============ FIELD STATS ============ -->
+    <section class="view" id="view-stats">
+      <div class="page-head"><div><h1>Field statistics</h1>
+        <div class="meta">Composition of the registered field this forecast is built on</div></div>
+      </div>
+      <div class="grid-tiles" id="stats-tiles"></div>
+      <div class="panel">
+        <div class="panel-head"><h2>Player rating distribution</h2></div>
+        <div id="chart-hist"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Teams by federation (top 20)</h2>
+          <div class="panel-sub">Some federations field multiple teams (e.g. Board 1 / Board 2 squads)</div>
+        </div>
+        <div id="chart-feds"></div>
+      </div>
+    </section>
+
+    <!-- ============ SIMULATE ============ -->
+    <section class="view" id="view-simulate">
+      <div class="page-head">
+        <div>
+          <h1>Play out the tournament</h1>
+          <div class="meta">Step through all 11 rounds with the same pairing engine and outcome model, overriding any match or board result as you go</div>
+        </div>
+        <div class="controls" id="sim-controls"></div>
+      </div>
+      <div id="sim-body"></div>
+    </section>
+
+    <footer class="credit">
+      Monte Carlo forecast · Davidson outcome model calibrated on 12,779 real 2022+2024 Olympiad games ·
+      data synced from chess-results.com · not affiliated with FIDE.
+    </footer>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null, unsub: {} };
+
+  const fmtPct = (x) => (x * 100).toFixed(1) + "%";
+  const fmtPct0 = (x) => Math.round(x * 100) + "%";
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v; else if (k === "html") n.innerHTML = v; else n.setAttribute(k, v);
+    }
+    for (const k of kids) if (k != null) n.append(k.nodeType ? k : document.createTextNode(k));
+    return n;
+  };
+  const svgEl = (tag, attrs = {}) => {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    return n;
+  };
+
+  // ---------------- countdown ----------------
+  function tickCountdown() {
+    const start = new Date("2026-09-16T09:00:00Z").getTime();
+    const now = Date.now();
+    const diff = start - now;
+    const cd = document.getElementById("countdown");
+    const label = document.getElementById("countdown-label");
+    if (diff <= 0) { cd.textContent = "Live"; label.textContent = "Olympiad underway"; return; }
+    const d = Math.floor(diff / 86400000), h = Math.floor((diff % 86400000) / 3600000);
+    cd.textContent = `${d}d ${h}h`;
+    label.textContent = "until Round 1 · 16 Sep 2026";
+  }
+  tickCountdown(); setInterval(tickCountdown, 60000);
+
+  // ---------------- data loading (db capability, falls back to bundled sample) ----------------
+  async function loadSection(id) {
+    try {
+      const db = await claude.use("db");
+      if (db) {
+        return await new Promise((resolve) => {
+          const ref = db.doc("forecasts/" + id);
+          let resolved = false;
+          const unsub = ref.onSnapshot((snap) => {
+            if (snap.exists) {
+              state.data[id] = snap.data();
+              if (id === state.section) render();
+              document.getElementById("live-dot").classList.add("pulse");
+              document.getElementById("status-text").textContent =
+                "Live · last forecast " + timeAgo(state.data[id].generatedAt);
+            }
+            if (!resolved) { resolved = true; resolve(state.data[id]); }
+          }, () => { if (!resolved) { resolved = true; resolve(null); } });
+          state.unsub[id] = unsub;
+          setTimeout(() => { if (!resolved) { resolved = true; resolve(null); } }, 9000);
+        });
+      }
+    } catch (e) { /* fall through to null */ }
+    return null;
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return "—";
+    const s = (Date.now() - new Date(iso + "Z").getTime()) / 1000;
+    if (s < 90) return "moments ago";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago";
+    return Math.round(s / 86400) + " d ago";
+  }
+
+  // ---------------- rendering ----------------
+  function currentData() { return state.data[state.section]; }
+
+  function render() {
+    const d = currentData();
+    document.getElementById("rail-count-open").textContent = state.data["2026-open"] ? state.data["2026-open"].numTeams : "—";
+    document.getElementById("rail-count-women").textContent = state.data["2026-women"] ? state.data["2026-women"].numTeams : "—";
+    if (!d) { document.getElementById("status-text").textContent = "Waiting for forecast data…"; return; }
+
+    document.getElementById("status-text").textContent = "Live · last forecast " + timeAgo(d.generatedAt);
+    const label = d.tournamentId.endsWith("women") ? "Women" : "Open";
+    document.getElementById("lb-title").textContent = d.name;
+    document.getElementById("lb-meta").textContent =
+      `${d.numTeams} teams · ${d.iterations.toLocaleString()} Monte Carlo iterations · ` +
+      (d.asOfRound > 0 ? `real results locked through round ${d.asOfRound}/${d.numRounds}` : `pre-event forecast, round 1 of ${d.numRounds} not yet played`);
+
+    renderTiles(d);
+    renderChartMedals(d);
+    renderTable(d);
+    renderBoards(d);
+    renderStats(d);
+  }
+
+  function renderTiles(d) {
+    const top = d.teams[0];
+    const wrap = document.getElementById("lb-tiles");
+    wrap.innerHTML = "";
+    const tiles = [
+      ["Favorite", top ? `${top.fed}` : "—", top ? top.name : ""],
+      ["Top gold chance", top ? fmtPct(top.pGold) : "—", top ? top.name : ""],
+      ["Rounds", `${d.numRounds}`, d.asOfRound > 0 ? `${d.asOfRound} played` : "not started"],
+      ["Field size", `${d.numTeams}`, "registered teams"],
+    ];
+    for (const [label, value, sub] of tiles) {
+      wrap.append(el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)));
+    }
+  }
+
+  function axisNumbers(maxVal) {
+    const steps = 4; const niceMax = Math.ceil(maxVal / 5) * 5 || 5;
+    return Array.from({ length: steps + 1 }, (_, i) => Math.round((niceMax / steps) * i));
+  }
+
+  function renderChartMedals(d) {
+    const n = parseInt(document.getElementById("lb-topn").value, 10);
+    document.getElementById("lb-topn-val").textContent = n;
+    const teams = d.teams.slice(0, n);
+    const w = 960, h = 340, padL = 40, padB = 92, padT = 16, padR = 12;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const maxPct = Math.max(10, ...teams.map(t => (t.pGold + t.pSilver + t.pBronze) * 100));
+    const ticks = axisNumbers(maxPct);
+    const yMax = ticks[ticks.length - 1];
+    const bw = plotW / teams.length;
+    const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h, role: "img", "aria-label": "Medal probability by team" });
+
+    ticks.forEach(t => {
+      const y = padT + plotH - (t / yMax) * plotH;
+      svg.append(svgEl("line", { x1: padL, x2: w - padR, y1: y, y2: y, stroke: "var(--line)", "stroke-width": 1 }));
+      const lab = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 10.5, fill: "var(--muted)", "font-family": "IBM Plex Mono" });
+      lab.textContent = t + "%"; svg.append(lab);
+    });
+
+    teams.forEach((t, i) => {
+      const x = padL + i * bw + bw * 0.18;
+      const bwi = bw * 0.64;
+      let cursor = padT + plotH;
+      const segs = [["pGold", "var(--gold)"], ["pSilver", "var(--silver)"], ["pBronze", "var(--bronze)"]];
+      segs.forEach(([k, color]) => {
+        const val = t[k] * 100;
+        const hgt = (val / yMax) * plotH;
+        cursor -= hgt;
+        const r = svgEl("rect", { x, y: cursor, width: bwi, height: Math.max(hgt, 0), fill: color, rx: 2 });
+        r.append(svgEl("title")); r.lastChild.textContent = `${t.name}: ${k.replace("p","")} ${val.toFixed(1)}%`;
+        svg.append(r);
+      });
+      const lx = x + bwi / 2;
+      const label = svgEl("text", {
+        x: 0, y: 0, "font-size": 10.5, fill: "var(--muted)", "font-family": "IBM Plex Sans",
+        transform: `translate(${lx}, ${padT + plotH + 14}) rotate(-52)`, "text-anchor": "end",
+      });
+      label.textContent = t.fed; svg.append(label);
+    });
+
+    const host = document.getElementById("chart-medals");
+    host.innerHTML = ""; host.append(svg);
+    const legend = el("div", { style: "display:flex; gap:16px; margin-top:8px; font-size:11.5px; color:var(--muted);" },
+      legendItem("var(--gold)", "Gold"), legendItem("var(--silver)", "Silver"), legendItem("var(--bronze)", "Bronze"));
+    host.append(legend);
+  }
+  function legendItem(color, label) {
+    return el("span", { style: "display:inline-flex; align-items:center; gap:5px;" },
+      el("span", { style: `width:9px;height:9px;border-radius:2px;background:${color};display:inline-block;` }), label);
+  }
+
+  function renderTable(d) {
+    const q = (document.getElementById("lb-search").value || "").toLowerCase();
+    let rows = d.teams.map((t, i) => ({ ...t, rank: i + 1 }));
+    if (q) rows = rows.filter(t => t.name.toLowerCase().includes(q) || t.fed.toLowerCase().includes(q));
+    const dir = state.sortDir, k = state.sortKey;
+    rows.sort((a, b) => {
+      if (k === "name") return dir * a.name.localeCompare(b.name);
+      return dir * ((a[k] ?? 0) - (b[k] ?? 0));
+    });
+    const tbody = document.getElementById("lb-tbody");
+    tbody.innerHTML = "";
+    for (const t of rows) {
+      const tr = el("tr", {});
+      tr.addEventListener("click", () => selectTeam(t.no));
+      tr.append(
+        el("td", { class: "rank-cell" }, "#" + t.rank),
+        el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
+        el("td", { class: "num" }, String(t.rtg ?? "—")),
+        el("td", { class: "num" }, fmtPct(t.pGold)),
+        el("td", { class: "num" }, fmtPct(t.pSilver)),
+        el("td", { class: "num" }, fmtPct(t.pBronze)),
+        el("td", { class: "num" }, medalCell(t.pAnyMedal)),
+        el("td", { class: "num" }, fmtPct(t.pTop8)),
+        el("td", { class: "num" }, t.expRank.toFixed(1)),
+      );
+      tbody.append(tr);
+    }
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 9, class: "empty-note" }, "No teams match your search.")));
+  }
+  function medalCell(p) {
+    const wrap = el("span", {});
+    wrap.append(fmtPct(p) + "  ");
+    const track = el("span", { class: "bar-track" });
+    track.append(el("span", { class: "bar-fill", style: `width:${Math.min(100, p * 200)}%` }));
+    wrap.append(track);
+    return wrap;
+  }
+
+  document.querySelectorAll("#lb-table th[data-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const k = th.dataset.key;
+      state.sortDir = state.sortKey === k ? -state.sortDir : (k === "name" ? 1 : -1);
+      state.sortKey = k;
+      renderTable(currentData());
+    });
+  });
+  document.getElementById("lb-search").addEventListener("input", () => renderTable(currentData()));
+  document.getElementById("lb-topn").addEventListener("input", () => renderChartMedals(currentData()));
+
+  // ---------------- team detail ----------------
+  function selectTeam(no) {
+    state.teamSel = no;
+    setView("team");
+    renderTeamDetail();
+  }
+  function renderTeamDetail() {
+    const d = currentData();
+    const body = document.getElementById("team-detail-body");
+    if (!d || state.teamSel == null) { body.innerHTML = ""; body.append(el("p", { class: "empty-note" }, "Select a team to see its forecast, roster, and rank distribution.")); return; }
+    const t = d.teams.find(x => x.no === state.teamSel);
+    if (!t) { body.innerHTML = ""; body.append(el("p", { class: "empty-note" }, "Team not found in this section.")); return; }
+    const rank = d.teams.indexOf(t) + 1;
+    body.innerHTML = "";
+    body.append(
+      el("div", { class: "team-header" },
+        el("span", { class: "fed-chip", style: "font-size:13px; padding:4px 8px;" }, t.fed),
+        el("h2", {}, t.name),
+        el("span", { class: "meta", style: "color:var(--muted)" }, `seed #${t.seed} · captain ${t.captain || "—"}`)),
+      el("div", { class: "grid-tiles" },
+        tile("Rating avg", String(t.rtg ?? "—"), "team average"),
+        tile("Any medal chance", fmtPct(t.pAnyMedal), `gold ${fmtPct0(t.pGold)} · silver ${fmtPct0(t.pSilver)} · bronze ${fmtPct0(t.pBronze)}`),
+        tile("Expected rank", t.expRank.toFixed(1), `± ${t.rankStd.toFixed(1)} across simulations, currently #${rank} by medal odds`),
+        tile("Expected match points", t.expMp.toFixed(1) + ` / ${d.numRounds * 2}`, `top-8 ${fmtPct0(t.pTop8)} · top-16 ${fmtPct0(t.pTop16)}`),
+      ),
+    );
+    const panel = el("div", { class: "panel" },
+      el("div", { class: "panel-head" }, el("h2", {}, "Roster")),
+      rosterGrid(t.roster));
+    body.append(panel);
+
+    const distPanel = el("div", { class: "panel" },
+      el("div", { class: "panel-head" }, el("h2", {}, "Final rank uncertainty"),
+        el("div", { class: "panel-sub" }, "Normal approximation from the simulation's mean ± std. dev.")));
+    distPanel.append(rankDistSvg(t, d.numTeams));
+    body.append(distPanel);
+  }
+  function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
+  function rosterGrid(roster) {
+    const g = el("div", { class: "roster-grid" });
+    for (const p of (roster || []).sort((a, b) => a.board - b.board)) {
+      g.append(el("div", { class: "roster-card" },
+        el("div", { class: "board-no" }, p.board <= 4 ? "Board " + p.board : "Reserve"),
+        el("div", { class: "p-name" }, (p.title ? p.title + " " : "") + p.name),
+        el("div", { class: "p-rtg" }, p.rating ? p.rating + " · " + p.fed : p.fed)));
+    }
+    return g;
+  }
+  function rankDistSvg(t, numTeams) {
+    const w = 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
+    const mean = t.expRank, sd = Math.max(t.rankStd, 1);
+    const lo = Math.max(1, mean - 3.2 * sd), hi = Math.min(numTeams, mean + 3.2 * sd);
+    const pts = 80; const xs = Array.from({ length: pts }, (_, i) => lo + (hi - lo) * i / (pts - 1));
+    const ys = xs.map(x => Math.exp(-0.5 * ((x - mean) / sd) ** 2));
+    const maxY = Math.max(...ys);
+    const px = x => padL + ((x - lo) / (hi - lo)) * (w - padL - padR);
+    const py = y => padT + (1 - y / maxY) * (h - padT - padB);
+    let path = `M ${px(xs[0])} ${py(0)} `;
+    xs.forEach((x, i) => path += `L ${px(x)} ${py(ys[i])} `);
+    path += `L ${px(xs[xs.length - 1])} ${py(0)} Z`;
+    const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h });
+    svg.append(svgEl("line", { x1: padL, x2: w - padR, y1: h - padB, y2: h - padB, stroke: "var(--line)" }));
+    const area = svgEl("path", { d: path, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-width": 1.6 });
+    svg.append(area);
+    const meanX = px(mean);
+    svg.append(svgEl("line", { x1: meanX, x2: meanX, y1: padT, y2: h - padB, stroke: "var(--accent-strong)", "stroke-width": 1.4, "stroke-dasharray": "3 3" }));
+    [lo, mean, hi].forEach(v => {
+      const lab = svgEl("text", { x: px(v), y: h - 8, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)", "font-family": "IBM Plex Mono" });
+      lab.textContent = "#" + Math.round(v); svg.append(lab);
+    });
+    return svg;
+  }
+
+  const teamSearch = document.getElementById("team-search");
+  const teamResults = document.getElementById("team-search-results");
+  teamSearch.addEventListener("input", () => {
+    const q = teamSearch.value.toLowerCase(); const d = currentData();
+    teamResults.innerHTML = "";
+    if (!d || !q) { teamResults.classList.remove("open"); return; }
+    const matches = d.teams.filter(t => t.name.toLowerCase().includes(q) || t.fed.toLowerCase().includes(q)).slice(0, 8);
+    matches.forEach(t => {
+      const row = el("div", { class: "result-row" }, el("span", {}, el("span", { class: "fed-chip" }, t.fed), t.name), el("span", { class: "num" }, fmtPct(t.pAnyMedal)));
+      row.addEventListener("click", () => { teamSearch.value = ""; teamResults.classList.remove("open"); selectTeam(t.no); });
+      teamResults.append(row);
+    });
+    teamResults.classList.toggle("open", matches.length > 0);
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".searchpick")) teamResults.classList.remove("open"); });
+
+  // ---------------- board medals ----------------
+  function renderBoards(d) {
+    const grid = document.getElementById("boards-grid");
+    grid.innerHTML = "";
+    const names = { "1": "Board 1", "2": "Board 2", "3": "Board 3", "4": "Board 4" };
+    Object.keys(names).forEach(k => {
+      const rows = (d.boards[k] || []).slice(0, 8);
+      const card = el("div", { class: "panel", style: "margin-bottom:0;" },
+        el("div", { class: "panel-head" }, el("h2", {}, names[k])));
+      const list = el("table", {}, el("tbody"));
+      const tb = list.querySelector("tbody");
+      rows.forEach((p, i) => {
+        tb.append(el("tr", {},
+          el("td", { class: "rank-cell", style: "width:24px;" }, i + 1),
+          el("td", {}, el("span", { class: "fed-chip" }, p.fed), el("span", { class: "team-name" }, p.name)),
+          el("td", { class: "num" }, p.tpr),
+          el("td", { class: "num" }, fmtPct(p.pMedal))));
+      });
+      if (!rows.length) card.append(el("p", { class: "empty-note" }, "Not enough simulated 8+ game samples yet."));
+      else card.append(list);
+      grid.append(card);
+    });
+  }
+
+  // ---------------- field stats ----------------
+  function renderStats(d) {
+    const s = d.stats;
+    const tiles = document.getElementById("stats-tiles");
+    tiles.innerHTML = "";
+    [["Avg. player rating", s.avgRating, "across all rostered players"],
+     ["Rating range", `${s.minRating}–${s.maxRating}`, "lowest to highest rated player"],
+     ["Federations", s.totalFederations, "represented in this section"],
+     ["Teams", d.numTeams, "registered for " + (d.tournamentId.endsWith("women") ? "Women" : "Open")]]
+      .forEach(([l, v, sub]) => tiles.append(tile(l, String(v), sub)));
+
+    const hist = s.ratingHistogram;
+    const w = 900, h = 220, padL = 34, padR = 10, padT = 10, padB = 34;
+    const maxC = Math.max(...hist.bins, 1);
+    const bw = (w - padL - padR) / hist.bins.length;
+    const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h });
+    hist.bins.forEach((c, i) => {
+      const bh = (c / maxC) * (h - padT - padB);
+      const x = padL + i * bw;
+      svg.append(svgEl("rect", { x: x + bw * 0.08, y: h - padB - bh, width: bw * 0.84, height: bh, fill: "var(--accent)", rx: 2 }));
+      if (i % 2 === 0) {
+        const lab = svgEl("text", { x: x + bw / 2, y: h - 10, "text-anchor": "middle", "font-size": 10, fill: "var(--muted)", "font-family": "IBM Plex Mono" });
+        lab.textContent = Math.round(hist.lo + i * hist.binWidth); svg.append(lab);
+      }
+    });
+    const hHost = document.getElementById("chart-hist"); hHost.innerHTML = ""; hHost.append(svg);
+
+    const feds = Object.entries(s.fedCounts);
+    const fw = 760, rowH = 20, fh = feds.length * rowH + 10;
+    const maxN = Math.max(...feds.map(f => f[1]), 1);
+    const fsvg = svgEl("svg", { viewBox: `0 0 ${fw} ${fh}`, width: "100%", height: fh });
+    feds.forEach(([fed, n], i) => {
+      const y = i * rowH + 4;
+      fsvg.append(svgEl("text", { x: 0, y: y + 12, "font-size": 11, fill: "var(--muted)", "font-family": "IBM Plex Mono" })).textContent = fed;
+      const barMax = fw - 140; const bw2 = (n / maxN) * barMax;
+      fsvg.append(svgEl("rect", { x: 46, y, width: bw2, height: 14, fill: "var(--accent)", rx: 3 }));
+      const lab = svgEl("text", { x: 46 + bw2 + 6, y: y + 12, "font-size": 11, fill: "var(--text)", "font-family": "IBM Plex Mono" });
+      lab.textContent = n; fsvg.append(lab);
+    });
+    const fHost = document.getElementById("chart-feds"); fHost.innerHTML = ""; fHost.append(fsvg);
+  }
+
+  // ================================================================
+  // Interactive round-by-round simulator -- a faithful JS port of the
+  // Python engine (chessolympiad/pairing/swiss_team.py, simulate/match.py,
+  // simulate/tiebreak.py, model/lineup.py, model/elo.py) so it can run
+  // live in the browser with manual overrides. Constants below MUST match
+  // chessolympiad/model/constants.py.
+  // ================================================================
+  const MC = {
+    NU_C0: -3.250392, NU_C1: 0.570763, WHITE_ADV: 39.836484,
+    TEAM_DAY_SHOCK_SD: 87.0,
+    LINEUP_SUB_INTERCEPTS: [-1.5802, -0.8865, -0.5517, -0.6756],
+    LINEUP_SUB_GAP_SLOPE: 0.0249,
+  };
+
+  function nuFor(avg) { return Math.exp(MC.NU_C0 + MC.NU_C1 * avg / 400); }
+  function outcomeProbs(rw, rb) {
+    const rwAdj = rw + MC.WHITE_ADV;
+    const nu = nuFor((rw + rb) / 2);
+    const a = Math.pow(10, rwAdj / 400), b = Math.pow(10, rb / 400), d = nu * Math.pow(10, (rwAdj + rb) / 800);
+    const denom = a + b + d;
+    return { pWhite: a / denom, pDraw: d / denom, pBlack: b / denom };
+  }
+  function sampleResult(rw, rb, rng) {
+    const { pWhite, pDraw } = outcomeProbs(rw, rb);
+    const u = rng();
+    if (u < pWhite) return "1-0";
+    if (u < pWhite + pDraw) return "1/2-1/2";
+    return "0-1";
+  }
+  function scoreFor(result) { return result === "1-0" ? [1, 0] : result === "0-1" ? [0, 1] : [0.5, 0.5]; }
+  function gaussian(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function activeLineup(roster) { return roster.filter(p => p.board <= 4).sort((a, b) => a.board - b.board); }
+  function chooseLineup(roster, ownRtg, oppRtg, rng) {
+    const lineup = activeLineup(roster);
+    const reserve = roster.find(p => p.board === 5);
+    if (!reserve) return lineup;
+    const gap = (ownRtg - oppRtg) / 100;
+    for (const boardNo of [4, 3, 2, 1]) {
+      const z = MC.LINEUP_SUB_INTERCEPTS[boardNo - 1] + MC.LINEUP_SUB_GAP_SLOPE * gap;
+      const p = 1 / (1 + Math.exp(-z));
+      if (rng() < p) return lineup.map(pl => pl.board === boardNo ? reserve : pl);
+    }
+    return lineup;
+  }
+
+  function simulateMatch(lineupA, lineupB, aWhiteOdd, rng) {
+    const shockA = gaussian(rng) * MC.TEAM_DAY_SHOCK_SD, shockB = gaussian(rng) * MC.TEAM_DAY_SHOCK_SD;
+    let aPts = 0, bPts = 0; const boards = [];
+    for (let i = 0; i < 4; i++) {
+      const boardNo = i + 1;
+      const aPlayer = lineupA[i], bPlayer = lineupB[i];
+      const aIsWhite = boardNo % 2 === 1 ? aWhiteOdd : !aWhiteOdd;
+      const white = aIsWhite ? aPlayer : bPlayer, black = aIsWhite ? bPlayer : aPlayer;
+      const whiteShock = aIsWhite ? shockA : shockB, blackShock = aIsWhite ? shockB : shockA;
+      const result = sampleResult(white.rating + whiteShock, black.rating + blackShock, rng);
+      const [wS, bS] = scoreFor(result);
+      if (aIsWhite) { aPts += wS; bPts += bS; } else { aPts += bS; bPts += wS; }
+      boards.push({ boardNo, whiteIsA: aIsWhite, white, black, result });
+    }
+    return { aPts, bPts, boards };
+  }
+  function recomputeFromBoards(boards) {
+    let aPts = 0, bPts = 0;
+    for (const b of boards) {
+      const [wS, bS] = scoreFor(b.result);
+      if (b.whiteIsA) { aPts += wS; bPts += bS; } else { aPts += bS; bPts += wS; }
+    }
+    return { aPts, bPts };
+  }
+
+  // ---- pairing engine (port of pairing/swiss_team.py) ----
+  class PairTeam {
+    constructor(no, seed, rtg) {
+      this.no = no; this.seed = seed; this.rtg = rtg; this.matchPoints = 0;
+      this.opponents = new Set(); this.hadBye = false; this.whiteOddCount = 0; this.whiteEvenCount = 0;
+    }
+  }
+  function scoreGroups(teams) {
+    const byMp = new Map();
+    for (const t of teams) { if (!byMp.has(t.matchPoints)) byMp.set(t.matchPoints, []); byMp.get(t.matchPoints).push(t); }
+    return [...byMp.keys()].sort((a, b) => b - a).map(mp => byMp.get(mp).sort((x, y) => x.seed - y.seed));
+  }
+  function assignColors(a, b) {
+    const at = a.whiteOddCount - a.whiteEvenCount, bt = b.whiteOddCount - b.whiteEvenCount;
+    if (at !== bt) return at < bt;
+    return a.seed < b.seed;
+  }
+  function pairObj(a, b) {
+    const aWhiteOdd = assignColors(a, b);
+    a.opponents.add(b.no); b.opponents.add(a.no);
+    if (aWhiteOdd) { a.whiteOddCount++; b.whiteEvenCount++; } else { b.whiteOddCount++; a.whiteEvenCount++; }
+    return { teamA: a.no, teamB: b.no, teamAWhiteOdd: aWhiteOdd };
+  }
+  function byeObj(t) { t.hadBye = true; return { teamA: t.no, teamB: null, teamAWhiteOdd: true }; }
+  function undoPairing(p, byNo) {
+    const a = byNo.get(p.teamA), b = byNo.get(p.teamB);
+    a.opponents.delete(b.no); b.opponents.delete(a.no);
+    if (p.teamAWhiteOdd) { a.whiteOddCount--; b.whiteEvenCount--; } else { b.whiteOddCount--; a.whiteEvenCount--; }
+  }
+  function swapInByeFreeTeam(byeCandidate, pairings, byNo) {
+    for (let idx = 0; idx < pairings.length; idx++) {
+      const p = pairings[idx];
+      if (p.teamB == null) continue;
+      for (const [thisNo, otherNo] of [[p.teamA, p.teamB], [p.teamB, p.teamA]]) {
+        const thisTeam = byNo.get(thisNo), otherTeam = byNo.get(otherNo);
+        if (thisTeam.hadBye || byeCandidate.opponents.has(otherNo) || thisNo === byeCandidate.no) continue;
+        undoPairing(p, byNo);
+        pairings[idx] = pairObj(byeCandidate, otherTeam);
+        pairings.push(byeObj(thisTeam));
+        return true;
+      }
+    }
+    return false;
+  }
+  function makePairings(teamsArr) {
+    const byNo = new Map(teamsArr.map(t => [t.no, t]));
+    const groups = scoreGroups(teamsArr);
+    const pairings = []; let floaters = [];
+    for (const group of groups) {
+      let pool = floaters.concat(group); floaters = [];
+      pool.sort((x, y) => x.seed - y.seed);
+      if (pool.length % 2 === 1) floaters.push(pool.pop());
+      const half = Math.floor(pool.length / 2);
+      let s1 = pool.slice(0, half), s2 = pool.slice(half);
+      const unmatchedS1 = [];
+      for (let i = 0; i < s1.length; i++) {
+        const t1 = s1[i];
+        if (i >= s2.length) { unmatchedS1.push(t1); continue; }
+        if (!t1.opponents.has(s2[i].no)) { pairings.push(pairObj(t1, s2[i])); continue; }
+        let swapped = false;
+        for (let j = i + 1; j < s2.length; j++) {
+          if (!t1.opponents.has(s2[j].no)) {
+            [s2[i], s2[j]] = [s2[j], s2[i]];
+            pairings.push(pairObj(t1, s2[i]));
+            swapped = true; break;
+          }
+        }
+        if (!swapped) unmatchedS1.push(t1);
+      }
+      const pairedNos = new Set();
+      pairings.forEach(p => { pairedNos.add(p.teamA); if (p.teamB != null) pairedNos.add(p.teamB); });
+      const leftoverS2 = s2.filter(t => !pairedNos.has(t.no));
+      floaters.push(...unmatchedS1, ...leftoverS2);
+    }
+    floaters.sort((a, b) => a.seed - b.seed);
+    while (floaters.length >= 2) {
+      const t1 = floaters.shift();
+      let idx = floaters.findIndex(t => !t1.opponents.has(t.no));
+      if (idx < 0) idx = 0;
+      const t2 = floaters.splice(idx, 1)[0];
+      pairings.push(pairObj(t1, t2));
+    }
+    if (floaters.length) {
+      const byeCandidate = floaters.pop();
+      if (!(byeCandidate.hadBye && swapInByeFreeTeam(byeCandidate, pairings, byNo))) {
+        pairings.push(byeObj(byeCandidate));
+      }
+    }
+    return pairings;
+  }
+
+  // ---- tiebreaks (port of simulate/tiebreak.py, Annex 2.I) ----
+  function isValue(rec, oppFinalMp) {
+    if (rec.kind === "bye") return 2 * (rec.cmpBefore + 1 + rec.remainingAfter);
+    if (rec.kind === "unplayed_win") return 4 * (rec.cmpBefore + 1 + rec.remainingAfter);
+    if (rec.kind === "unplayed_loss") return 0;
+    return rec.gamePoints * oppFinalMp;
+  }
+  function computeTiebreaks(history, finalMp) {
+    const out = new Map();
+    for (const [teamNo, records] of history) {
+      const vals = []; const realOppMp = [];
+      for (const rec of records) {
+        const oppMp = rec.opponentNo != null ? finalMp.get(rec.opponentNo) : null;
+        vals.push({ played: rec.kind === "played", oppMp, val: isValue(rec, oppMp) });
+        if (rec.kind === "played" && oppMp != null) realOppMp.push(oppMp);
+      }
+      const played = vals.filter(v => v.played), nonPlayed = vals.filter(v => !v.played);
+      let playedKept = played;
+      if (played.length) {
+        let minIdx = 0;
+        for (let i = 1; i < played.length; i++) if (played[i].oppMp < played[minIdx].oppMp) minIdx = i;
+        playedKept = played.slice(0, minIdx).concat(played.slice(minIdx + 1));
+      }
+      const tb1 = playedKept.reduce((s, v) => s + v.val, 0) + nonPlayed.reduce((s, v) => s + v.val, 0);
+      const tb2 = records.reduce((s, r) => s + r.gamePoints, 0);
+      const sortedOpp = [...realOppMp].sort((a, b) => a - b);
+      const tb3list = sortedOpp.length > 1 ? sortedOpp.slice(1) : sortedOpp;
+      const tb3 = tb3list.reduce((s, v) => s + v, 0);
+      out.set(teamNo, [tb1, tb2, tb3]);
+    }
+    return out;
+  }
+  function rankTeams(matchPoints, tiebreaks) {
+    return [...matchPoints.keys()].sort((x, y) => {
+      if (matchPoints.get(y) !== matchPoints.get(x)) return matchPoints.get(y) - matchPoints.get(x);
+      const [a1, a2, a3] = tiebreaks.get(x), [b1, b2, b3] = tiebreaks.get(y);
+      if (b1 !== a1) return b1 - a1;
+      if (b2 !== a2) return b2 - a2;
+      return b3 - a3;
+    });
+  }
+
+  // ---- sim state & UI ----
+  const Sim = {
+    active: false, teams: [], byNo: new Map(), rosters: new Map(), teamData: new Map(),
+    matchPoints: new Map(), history: new Map(), playerStats: new Map(),
+    round: 0, numRounds: 11, pairings: [], results: new Map(), roundSnapshots: [],
+    rng: Math.random,
+  };
+
+  function dataTeam(no) { return Sim.teamData.get(no); }
+  function fmtGamePts(x) {
+    const whole = Math.floor(x + 1e-9), frac = x - whole;
+    if (Math.abs(frac) < 1e-6) return String(whole);
+    return whole === 0 ? "½" : whole + "½";
+  }
+  function mkBtn(label, onClick, variant) {
+    const b = el("button", { class: "btn" + (variant ? " " + variant : "") }, label);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function initSim() {
+    const d = currentData();
+    if (!d) return;
+    Sim.active = true; Sim.round = 0; Sim.numRounds = d.numRounds;
+    Sim.teamData = new Map(d.teams.map(t => [t.no, t]));
+    Sim.teams = d.teams.map(t => new PairTeam(t.no, t.seed, t.rtg || 1500));
+    Sim.byNo = new Map(Sim.teams.map(t => [t.no, t]));
+    Sim.rosters = new Map(d.teams.map(t => [t.no, t.roster || []]));
+    Sim.matchPoints = new Map(Sim.teams.map(t => [t.no, 0]));
+    Sim.history = new Map(Sim.teams.map(t => [t.no, []]));
+    Sim.playerStats = new Map();
+    Sim.roundSnapshots = [];
+    startRound();
+  }
+
+  function startRound() {
+    Sim.round += 1;
+    Sim.pairings = makePairings(Sim.teams);
+    Sim.results = new Map();
+    Sim.pairings.forEach((p, idx) => {
+      if (p.teamB == null) { Sim.results.set(idx, { bye: true }); return; }
+      const teamA = Sim.byNo.get(p.teamA), teamB = Sim.byNo.get(p.teamB);
+      const rosterA = Sim.rosters.get(p.teamA) || [], rosterB = Sim.rosters.get(p.teamB) || [];
+      const lineupA = chooseLineup(rosterA, teamA.rtg, teamB.rtg, Sim.rng);
+      const lineupB = chooseLineup(rosterB, teamB.rtg, teamA.rtg, Sim.rng);
+      if (lineupA.length < 4 || lineupB.length < 4) { Sim.results.set(idx, { aPts: 2, bPts: 2, boards: [], overridden: false }); return; }
+      const { aPts, bPts, boards } = simulateMatch(lineupA, lineupB, p.teamAWhiteOdd, Sim.rng);
+      Sim.results.set(idx, { aPts, bPts, boards, overridden: false });
+    });
+    renderSim();
+  }
+
+  function overrideMatch(idx, outcome) {
+    const p = Sim.pairings[idx];
+    const teamA = Sim.byNo.get(p.teamA), teamB = Sim.byNo.get(p.teamB);
+    const rosterA = Sim.rosters.get(p.teamA) || [], rosterB = Sim.rosters.get(p.teamB) || [];
+    const lineupA = chooseLineup(rosterA, teamA.rtg, teamB.rtg, Sim.rng);
+    const lineupB = chooseLineup(rosterB, teamB.rtg, teamA.rtg, Sim.rng);
+    let attempt, cls;
+    for (let tries = 0; tries < 25; tries++) {
+      attempt = simulateMatch(lineupA, lineupB, p.teamAWhiteOdd, Sim.rng);
+      cls = attempt.aPts > attempt.bPts ? "A" : attempt.aPts < attempt.bPts ? "B" : "D";
+      if (cls === outcome) break;
+    }
+    if (cls !== outcome) {
+      // 25 random attempts couldn't hit the target classification (typical
+      // for a lopsided rating gap) -- force boards one at a time, checking
+      // after each, until the aggregate actually reaches the target. Forcing
+      // only one board isn't always enough to flip a 4-board match when the
+      // rating gap is extreme, so this keeps going until it truly matches.
+      for (const b of attempt.boards) {
+        const cur = recomputeFromBoards(attempt.boards);
+        const curCls = cur.aPts > cur.bPts ? "A" : cur.aPts < cur.bPts ? "B" : "D";
+        if (curCls === outcome) break;
+        if (outcome === "D") b.result = "1/2-1/2";
+        else if (outcome === "A") b.result = b.whiteIsA ? "1-0" : "0-1";
+        else b.result = b.whiteIsA ? "0-1" : "1-0";
+      }
+      const fixed = recomputeFromBoards(attempt.boards);
+      attempt.aPts = fixed.aPts; attempt.bPts = fixed.bPts;
+    }
+    Sim.results.set(idx, { aPts: attempt.aPts, bPts: attempt.bPts, boards: attempt.boards, overridden: true });
+    renderSim();
+  }
+  function overrideBoard(idx, boardNo, newResult) {
+    const res = Sim.results.get(idx);
+    const board = res.boards.find(b => b.boardNo === boardNo);
+    board.result = newResult;
+    const fixed = recomputeFromBoards(res.boards);
+    res.aPts = fixed.aPts; res.bPts = fixed.bPts; res.overridden = true;
+    renderSim();
+  }
+
+  function recordPlayerResult(teamNo, boardNo, player, score, oppRtg) {
+    const key = teamNo + ":" + boardNo + ":" + (player.fideId || player.name);
+    let stat = Sim.playerStats.get(key);
+    if (!stat) { stat = { teamNo, boardNo, name: player.name, title: player.title, score: 0, games: 0, oppSum: 0 }; Sim.playerStats.set(key, stat); }
+    stat.score += score; stat.games += 1; stat.oppSum += oppRtg;
+  }
+
+  function confirmRound() {
+    const remainingAfter = Sim.numRounds - Sim.round;
+    Sim.pairings.forEach((p, idx) => {
+      const res = Sim.results.get(idx);
+      const a = Sim.byNo.get(p.teamA);
+      const cmpA = Sim.matchPoints.get(p.teamA);
+      if (p.teamB == null) {
+        Sim.matchPoints.set(p.teamA, cmpA + 2); a.matchPoints = cmpA + 2;
+        Sim.history.get(p.teamA).push({ opponentNo: null, gamePoints: 4, cmpBefore: cmpA, remainingAfter, kind: "bye" });
+        return;
+      }
+      const b = Sim.byNo.get(p.teamB);
+      const cmpB = Sim.matchPoints.get(p.teamB);
+      const [aMp, bMp] = res.aPts > res.bPts ? [2, 0] : res.aPts < res.bPts ? [0, 2] : [1, 1];
+      Sim.matchPoints.set(p.teamA, cmpA + aMp); Sim.matchPoints.set(p.teamB, cmpB + bMp);
+      a.matchPoints = cmpA + aMp; b.matchPoints = cmpB + bMp;
+      Sim.history.get(p.teamA).push({ opponentNo: p.teamB, gamePoints: res.aPts, cmpBefore: cmpA, remainingAfter, kind: "played" });
+      Sim.history.get(p.teamB).push({ opponentNo: p.teamA, gamePoints: res.bPts, cmpBefore: cmpB, remainingAfter, kind: "played" });
+      for (const board of (res.boards || [])) {
+        const whiteTeam = board.whiteIsA ? p.teamA : p.teamB;
+        const blackTeam = whiteTeam === p.teamA ? p.teamB : p.teamA;
+        const [wS, bS] = scoreFor(board.result);
+        recordPlayerResult(whiteTeam, board.boardNo, board.white, wS, board.black.rating);
+        recordPlayerResult(blackTeam, board.boardNo, board.black, bS, board.white.rating);
+      }
+    });
+    const tb = computeTiebreaks(Sim.history, Sim.matchPoints);
+    const ranking = rankTeams(Sim.matchPoints, tb);
+    Sim.roundSnapshots.push({ round: Sim.round, ranking, matchPoints: new Map(Sim.matchPoints), tiebreaks: tb });
+    if (Sim.round < Sim.numRounds) startRound(); else renderSim();
+  }
+  function autoPlayRemaining() {
+    while (Sim.roundSnapshots.length < Sim.numRounds) confirmRound();
+  }
+
+  function renderMatchCard(p, idx) {
+    const teamA = dataTeam(p.teamA);
+    if (p.teamB == null) {
+      return el("div", { class: "match-card bye-card" }, `${teamA.fed} ${teamA.name} receives the round bye`);
+    }
+    const teamB = dataTeam(p.teamB);
+    const res = Sim.results.get(idx);
+    const card = el("div", { class: "match-card" });
+    const top = el("div", { class: "match-top" },
+      el("div", { class: "match-teams", style: "justify-content:flex-end;" }, el("span", { class: "fed-chip" }, teamA.fed), teamA.name),
+      el("div", { class: "match-score" + (res.overridden ? " overridden" : "") }, fmtGamePts(res.aPts) + " : " + fmtGamePts(res.bPts)),
+      el("div", { class: "match-teams", style: "justify-content:flex-start;" }, el("span", { class: "fed-chip" }, teamB.fed), teamB.name),
+      (res.boards && res.boards.length) ? mkBtn("Boards", () => card.querySelector(".board-rows").classList.toggle("open"), "ghost") : null,
+    );
+    card.append(top);
+    card.append(el("div", { class: "override-row" },
+      mkBtn(teamA.fed + " win", () => overrideMatch(idx, "A")),
+      mkBtn("Draw", () => overrideMatch(idx, "D")),
+      mkBtn(teamB.fed + " win", () => overrideMatch(idx, "B")),
+    ));
+    const boardRows = el("div", { class: "board-rows" });
+    (res.boards || []).forEach(b => {
+      const sel = el("select", {});
+      [["1-0", "1–0"], ["1/2-1/2", "½–½"], ["0-1", "0–1"]].forEach(([v, label]) => {
+        const opt = el("option", { value: v }, label);
+        if (b.result === v) opt.setAttribute("selected", "selected");
+        sel.append(opt);
+      });
+      sel.addEventListener("change", () => overrideBoard(idx, b.boardNo, sel.value));
+      boardRows.append(el("div", { class: "board-row" },
+        el("div", {}, "Bd " + b.boardNo),
+        el("div", { class: "side" }, el("span", { class: "pname" }, (b.white.title ? b.white.title + " " : "") + b.white.name), el("span", { class: "prtg" }, b.white.rating)),
+        sel,
+        el("div", { class: "side right" }, el("span", { class: "pname" }, (b.black.title ? b.black.title + " " : "") + b.black.name), el("span", { class: "prtg" }, b.black.rating)),
+        el("div", {}, ""),
+      ));
+    });
+    card.append(boardRows);
+    return card;
+  }
+
+  function renderStandingsPanel() {
+    const panel = el("div", { class: "panel" });
+    const latest = Sim.roundSnapshots[Sim.roundSnapshots.length - 1];
+    panel.append(el("div", { class: "panel-head" }, el("h2", {}, latest ? "Standings after round " + latest.round : "Starting order (seed)")));
+    let rows;
+    if (latest) {
+      rows = latest.ranking.map((no, i) => ({ no, rank: i + 1, mp: latest.matchPoints.get(no), tb: latest.tiebreaks.get(no) }));
+    } else {
+      rows = Sim.teams.slice().sort((a, b) => a.seed - b.seed).map((t, i) => ({ no: t.no, rank: i + 1, mp: 0, tb: [0, 0, 0] }));
+    }
+    const table = el("table", { class: "standings-table" });
+    table.append(el("thead", {}, el("tr", {}, el("th", {}, "#"), el("th", {}, "Team"), el("th", { class: "num" }, "MP"), el("th", { class: "num" }, "TB1"), el("th", { class: "num" }, "TB2"), el("th", { class: "num" }, "TB3"))));
+    const tbody = el("tbody", {});
+    rows.slice(0, 25).forEach(r => {
+      const team = dataTeam(r.no);
+      const cls = r.rank === 1 ? "medal-gold" : r.rank === 2 ? "medal-silver" : r.rank === 3 ? "medal-bronze" : "";
+      tbody.append(el("tr", { class: cls },
+        el("td", { class: "rank-cell" }, "#" + r.rank),
+        el("td", {}, el("span", { class: "fed-chip" }, team.fed), team.name),
+        el("td", { class: "num" }, String(r.mp)),
+        el("td", { class: "num" }, r.tb[0].toFixed(1)),
+        el("td", { class: "num" }, r.tb[1].toFixed(1)),
+        el("td", { class: "num" }, r.tb[2].toFixed(1)),
+      ));
+    });
+    table.append(tbody);
+    panel.append(el("div", { class: "table-wrap" }, table));
+    return panel;
+  }
+
+  function renderFinalSummary() {
+    const panel = el("div", { class: "panel" });
+    panel.append(el("div", { class: "panel-head" }, el("h2", {}, "Board medal leaders (this play-through)")));
+    const byBoard = new Map();
+    for (const stat of Sim.playerStats.values()) {
+      if (stat.games >= 8) {
+        const tpr = stat.oppSum / stat.games + 800 * (stat.score / stat.games - 0.5);
+        if (!byBoard.has(stat.boardNo)) byBoard.set(stat.boardNo, []);
+        byBoard.get(stat.boardNo).push({ ...stat, tpr });
+      }
+    }
+    const grid = el("div", { class: "grid-tiles", style: "grid-template-columns:repeat(auto-fit,minmax(220px,1fr));" });
+    [1, 2, 3, 4].forEach(b => {
+      const list = (byBoard.get(b) || []).sort((x, y) => y.tpr - x.tpr);
+      const leader = list[0];
+      const team = leader ? dataTeam(leader.teamNo) : null;
+      grid.append(el("div", { class: "tile" },
+        el("div", { class: "label" }, "Board " + b),
+        el("div", { class: "value", style: "font-size:15px;" }, leader ? (leader.title ? leader.title + " " : "") + leader.name : "—"),
+        el("div", { class: "sub" }, leader ? "TPR " + Math.round(leader.tpr) + " · " + (team ? team.fed : "") : "not enough 8+ game samples"),
+      ));
+    });
+    panel.append(grid);
+    return panel;
+  }
+
+  function renderSim() {
+    const controls = document.getElementById("sim-controls");
+    const body = document.getElementById("sim-body");
+    controls.innerHTML = ""; body.innerHTML = "";
+    if (!Sim.active) {
+      const d = currentData();
+      controls.append(mkBtn("Start simulation", initSim, "primary"));
+      body.append(el("p", { class: "empty-note" },
+        `Start a fresh play-through of all ${d ? d.numRounds : 11} rounds for ${d ? (d.tournamentId.endsWith("women") ? "Women" : "Open") : "this section"}, `
+        + `using the same pairing engine, outcome model, and lineup-rotation behavior as the forecast. Override any match or board result as you go.`));
+      return;
+    }
+    controls.append(mkBtn("Reset", () => { Sim.active = false; renderSim(); }, "ghost"));
+    const finished = Sim.roundSnapshots.length >= Sim.numRounds;
+    if (!finished) controls.append(mkBtn("Auto-play remaining rounds", autoPlayRemaining, ""));
+
+    const banner = el("div", { class: "round-banner" },
+      el("div", {}, el("div", { class: "round-no" }, "Round " + Sim.round + " / " + Sim.numRounds),
+        el("div", { class: "meta" }, finished ? "Tournament complete" : "Review or override results, then confirm to advance")));
+    if (!finished) banner.append(mkBtn("Confirm round & advance →", confirmRound, "primary"));
+    body.append(banner);
+
+    if (!finished) Sim.pairings.forEach((p, idx) => body.append(renderMatchCard(p, idx)));
+    body.append(renderStandingsPanel());
+    if (finished) body.append(renderFinalSummary());
+  }
+
+  // ---------------- nav wiring ----------------
+  function setView(view) {
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+    if (view === "simulate") renderSim();
+  }
+  document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+  document.querySelectorAll(".switch-btn").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".switch-btn").forEach(x => x.classList.toggle("active", x === b));
+    state.section = b.dataset.section;
+    render();
+  }));
+
+  // ---------------- boot ----------------
+  (async () => {
+    await Promise.all([loadSection("2026-open"), loadSection("2026-women")]);
+    render();
+  })();
+})();
+</script>
+

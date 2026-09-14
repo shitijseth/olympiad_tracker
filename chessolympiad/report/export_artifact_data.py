@@ -1,0 +1,124 @@
+"""Export forecast data for the artifact dashboard's db seed.
+
+Produces a compact-but-complete JSON payload per section: team forecasts
+(with nested rosters), per-board medal leaderboards, and aggregate field
+stats -- sized to comfortably fit the artifact db's 256 KiB/document cap.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from chessolympiad.data import db
+
+OUT_DIR = Path(__file__).resolve().parents[2] / "data" / "artifact_export"
+
+
+def _latest_run(conn, tournament_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT * FROM simulation_runs WHERE tournament_id=? ORDER BY run_id DESC LIMIT 1", (tournament_id,)
+    ).fetchone()
+
+
+def export_section(conn, tournament_id: str) -> dict:
+    t = conn.execute("SELECT * FROM tournaments WHERE tournament_id=?", (tournament_id,)).fetchone()
+    run = _latest_run(conn, tournament_id)
+    if run is None:
+        raise SystemExit(f"No simulation run found for {tournament_id} -- run `simulate` first.")
+
+    rosters: dict[int, list[dict]] = {}
+    for r in conn.execute(
+        "SELECT team_no, board_no, name, title, rating, federation, fide_id FROM players WHERE tournament_id=? ORDER BY team_no, board_no",
+        (tournament_id,),
+    ):
+        rosters.setdefault(r["team_no"], []).append(
+            {"board": r["board_no"], "name": r["name"], "title": r["title"], "rating": r["rating"], "fed": r["federation"], "fideId": r["fide_id"]}
+        )
+
+    teams = []
+    for r in conn.execute(
+        """
+        SELECT tf.*, t.federation, t.team_name, t.rating_avg, t.captain, t.initial_rank
+        FROM team_forecasts tf JOIN teams t ON t.tournament_id=? AND t.team_no=tf.team_no
+        WHERE tf.run_id=? ORDER BY tf.p_any_medal DESC
+        """,
+        (tournament_id, run["run_id"]),
+    ):
+        teams.append({
+            "no": r["team_no"], "fed": r["federation"], "name": r["team_name"],
+            "rtg": r["rating_avg"], "captain": r["captain"], "seed": r["initial_rank"],
+            "pGold": round(r["p_gold"], 4), "pSilver": round(r["p_silver"], 4), "pBronze": round(r["p_bronze"], 4),
+            "pAnyMedal": round(r["p_any_medal"], 4), "pCatMedal": round(r["p_category_medal"], 4),
+            "pTop8": round(r["p_top8"], 4), "pTop16": round(r["p_top16"], 4),
+            "expRank": round(r["expected_rank"], 1), "expMp": round(r["expected_match_pts"], 1),
+            "rankStd": round(r["rank_std"], 1),
+            "roster": rosters.get(r["team_no"], []),
+        })
+
+    boards: dict[str, list[dict]] = {}
+    for row in conn.execute(
+        """
+        SELECT pf.*, t.federation, t.team_name FROM player_forecasts pf
+        JOIN teams t ON t.tournament_id=? AND t.team_no=pf.team_no
+        WHERE pf.run_id=? ORDER BY pf.board_no, pf.p_board_medal DESC
+        """,
+        (tournament_id, run["run_id"]),
+    ):
+        key = str(row["board_no"])
+        lst = boards.setdefault(key, [])
+        if len(lst) < 15:
+            lst.append({
+                "fed": row["federation"], "team": row["team_name"], "name": row["name"],
+                "tpr": round(row["expected_tpr"]), "pMedal": round(row["p_board_medal"], 4),
+            })
+
+    ratings = [r["rating"] for r in conn.execute(
+        "SELECT rating FROM players WHERE tournament_id=? AND rating IS NOT NULL AND rating>0", (tournament_id,)
+    )]
+    fed_counts: dict[str, int] = {}
+    for r in conn.execute("SELECT federation FROM teams WHERE tournament_id=?", (tournament_id,)):
+        fed_counts[r["federation"]] = fed_counts.get(r["federation"], 0) + 1
+
+    bins = [0] * 12
+    lo, hi = 1000, 2900
+    width = (hi - lo) / len(bins)
+    for r in ratings:
+        idx = min(len(bins) - 1, max(0, int((r - lo) // width)))
+        bins[idx] += 1
+
+    return {
+        "tournamentId": tournament_id,
+        "name": t["name"],
+        "numRounds": t["num_rounds"],
+        "numTeams": len(teams),
+        "lastSynced": t["last_synced_at"],
+        "generatedAt": run["created_at"],
+        "asOfRound": run["as_of_round"],
+        "iterations": run["iterations"],
+        "teams": teams,
+        "boards": boards,
+        "stats": {
+            "avgRating": round(sum(ratings) / len(ratings)) if ratings else None,
+            "minRating": min(ratings) if ratings else None,
+            "maxRating": max(ratings) if ratings else None,
+            "ratingHistogram": {"lo": lo, "hi": hi, "binWidth": width, "bins": bins},
+            "fedCounts": dict(sorted(fed_counts.items(), key=lambda kv: -kv[1])[:20]),
+            "totalFederations": len(fed_counts),
+        },
+    }
+
+
+if __name__ == "__main__":
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    conn = db.connect()
+    try:
+        for tid in ["2026-open", "2026-women"]:
+            payload = export_section(conn, tid)
+            path = OUT_DIR / f"{tid}.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            print(f"{tid}: {len(teams := payload['teams'])} teams, "
+                  f"{sum(len(v) for v in payload['boards'].values())} board entries, "
+                  f"{path.stat().st_size / 1024:.1f} KiB -> {path}")
+    finally:
+        conn.close()
