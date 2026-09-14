@@ -133,6 +133,29 @@ def run_checks(base_url: str):
         page.wait_for_function("document.querySelectorAll('#lb-table tbody tr').length > 5", timeout=15000)
         page.wait_for_timeout(300)
 
+        def check_every_team_row_renders_roster(section_label):
+            page.click(".nav-btn[data-view='leaderboard']")
+            page.wait_for_timeout(200)
+            row_count = page.locator("#lb-table tbody tr").count()
+            broken = []
+            for i in range(row_count):
+                page.locator("#lb-table tbody tr").nth(i).click()
+                page.wait_for_timeout(40)
+                html = page.evaluate("document.getElementById('team-detail-body').innerHTML")
+                if "Roster" not in html or "roster-card" not in html:
+                    name = page.evaluate(
+                        "document.querySelector('#team-detail-body h2') ? "
+                        "document.querySelector('#team-detail-body h2').textContent : 'UNKNOWN'"
+                    )
+                    broken.append((i, name))
+                page.click(".nav-btn[data-view='leaderboard']")
+                page.wait_for_timeout(15)
+            check(
+                f"every team row in {section_label} renders a Roster panel ({row_count} teams)",
+                len(broken) == 0,
+                f"{len(broken)} broken: {broken[:10]}",
+            )
+
         title = page.locator("#lb-title").inner_text()
         check("leaderboard title loads (Open)", "Open" in title, title)
         status_text = page.locator("#status-text").inner_text()
@@ -152,11 +175,23 @@ def run_checks(base_url: str):
         page.wait_for_function("document.getElementById('lb-title').textContent.includes('Open')", timeout=15000)
         page.wait_for_timeout(300)
 
-        for view, min_len in [("team", 20), ("boards", 20), ("stats", 20)]:
+        for view, min_len in [("boards", 20), ("stats", 20)]:
             page.click(f".nav-btn[data-view='{view}']")
             page.wait_for_timeout(400)
             text = page.locator(f"#view-{view}").inner_text()
             check(f"{view} view shows content", len(text.strip()) > min_len, text[:120])
+
+        # Team detail: click through every single team row (not just one) --
+        # a weak "does the view have >20 chars of text" check would pass even
+        # on the empty-state placeholder text and miss a real rendering bug.
+        check_every_team_row_renders_roster("2026-open")
+        page.click(".switch-btn[data-section='2026-women']")
+        page.wait_for_function("document.getElementById('lb-title').textContent.includes('Women')", timeout=15000)
+        page.wait_for_timeout(300)
+        check_every_team_row_renders_roster("2026-women")
+        page.click(".switch-btn[data-section='2026-open']")
+        page.wait_for_function("document.getElementById('lb-title').textContent.includes('Open')", timeout=15000)
+        page.wait_for_timeout(300)
 
         page.click(".nav-btn[data-view='simulate']")
         page.wait_for_timeout(400)
