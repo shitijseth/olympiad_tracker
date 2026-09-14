@@ -20,6 +20,24 @@ Once the event starts, `live-update` re-syncs real round-by-board results
 from chess-results.com and re-simulates only the *remaining* rounds, using
 each player's blended pre-event/in-event ("adaptive") rating.
 
+Once at least one real round has been ingested (`asOfRound > 0`), the
+dashboard also surfaces the *actual* tournament progress alongside the
+forecast (`chessolympiad/simulate/real_standings.py`, computed by replaying
+real rounds through the same `apply_real_round` path the forecast itself
+uses, so the two can never disagree about what a real round meant):
+- **Leaderboard**: actual match points and current real rank next to the
+  forecast columns.
+- **Team detail**: a "Results so far" panel with the round-by-round record
+  (opponent, score, W/D/L, expandable per-board detail).
+- **Board medals**: each player's actual games/TPR so far next to their
+  simulated forecast TPR.
+- **Simulate tab**: real rounds are ingested verbatim (real pairings aren't
+  reproducible by the synthetic Swiss-pairing algorithm) before the
+  interactive simulator starts generating rounds itself.
+
+These fields are simply absent from the exported JSON pre-event, so nothing
+changes in the dashboard until the event actually starts.
+
 The dashboard (`ui/artifact/dashboard.html`, published as a Claude Artifact)
 also includes an **interactive round-by-round simulator**: a full
 client-side JS port of the pairing engine, outcome model, and lineup
@@ -141,6 +159,14 @@ caught a real bug (`Element.append()` returning `undefined`, not the
 appended node, silently breaking the Field Stats federation chart on every
 render) before it reached the published artifact.
 
+The live-progress UI (actual MP/rank, round-by-round history, actual TPR,
+Simulate-tab real-round seeding — see "What it does" above) has its own
+dependency-free regression test, `scripts/validate_dashboard_live_ui.py`:
+it hand-builds a small synthetic "2 real rounds played" payload matching
+`export_artifact_data.py`'s exact schema and drives the same Playwright
+checks, since the real 2026 data won't have `asOfRound > 0` until the event
+actually starts.
+
 ## Known simplifications
 
 - **Pairing engine** (`chessolympiad/pairing/swiss_team.py`): a fast,
@@ -177,10 +203,12 @@ python -m chessolympiad.report.export_artifact_data   # writes data/artifact_exp
 # once the event is underway (from 16 Sep 2026):
 python -m chessolympiad.cli live-update open
 python -m chessolympiad.cli live-update women
+python -m chessolympiad.report.export_artifact_data   # re-export -- now includes real standings/history
 
 # validate the dashboard's actual UI end-to-end (needs the artifact export above):
 playwright install chromium   # one-time
 python scripts/validate_dashboard_ui.py
+python scripts/validate_dashboard_live_ui.py     # the live/in-progress UI, synthetic data (no event needed)
 ```
 
 Reports land in `reports/{tournament_id}_forecast.{md,csv}`. The dashboard
@@ -196,12 +224,17 @@ chessolympiad/
   data/            chess-results.com client + idempotent sync + SQLite schema
   model/           Davidson outcome model, calibration, lineup, adaptive rating
   pairing/         Swiss team pairing engine
-  simulate/        match/round/tournament Monte Carlo simulator, exact tiebreaks
+  simulate/        match/round/tournament Monte Carlo simulator, exact tiebreaks;
+                   real_standings.py derives actual (non-simulated) standings/
+                   history/per-player stats from real rounds ingested so far
   backtest/        blind replay of 2022/2024 against real outcomes
   report/          forecast persistence, markdown/CSV report generation, artifact data export
   analysis/        empirical factor study (chessolympiad/analysis/factor_study.py)
   cli.py           also implements live-update (idempotent resync + re-simulate)
 ui/artifact/dashboard.html   the published dashboard's source (Claude Artifact)
+scripts/           validate_dashboard_ui.py (pre-event UI, real exported data) and
+                   validate_dashboard_live_ui.py (live/in-progress UI, synthetic data)
 tests/             pytest: tiebreak arithmetic, pairing invariants, Elo sanity,
-                   team-day shock, lineup rotation, an end-to-end stratification test
+                   team-day shock, lineup rotation, an end-to-end stratification test,
+                   real_standings correctness (match points/rank/round history/replay)
 ```

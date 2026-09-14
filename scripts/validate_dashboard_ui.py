@@ -174,6 +174,8 @@ def run_checks(base_url: str):
         check("leaderboard title loads (Open)", "Open" in title, title)
         status_text = page.locator("#status-text").inner_text()
         check("status text shows live forecast", "Live" in status_text, status_text)
+        check("body does NOT get the 'live' class pre-event (asOfRound=0)",
+              not page.evaluate("document.body.classList.contains('live')"))
         rows = page.locator("#lb-table tbody tr")
         check("leaderboard table has ~208 team rows", rows.count() >= 200, f"got {rows.count()}")
         first_team = rows.nth(0).inner_text()

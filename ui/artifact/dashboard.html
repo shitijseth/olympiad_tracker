@@ -155,6 +155,18 @@
   .bar-fill{ height:100%; background:var(--accent); border-radius:99px; }
 
   .empty-note{ color:var(--muted); font-size:12.5px; padding:14px 0; }
+  /* Real-results columns/panels only make sense once at least one round has actually been
+     played -- hidden by default, revealed by toggling .live on an ancestor once asOfRound>0. */
+  .live-col{ display:none; }
+  .live .live-col{ display:table-cell; }
+  .live-only{ display:none; }
+  .live .live-only{ display:block; }
+  .result-pill{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px;
+    font-family:"IBM Plex Mono"; font-size:11px; font-weight:700; }
+  .result-pill.W{ background:color-mix(in srgb, var(--gold) 20%, transparent); color:var(--accent-strong); }
+  .result-pill.D{ background:var(--surface-2); color:var(--muted); }
+  .result-pill.L{ background:color-mix(in srgb, var(--bronze) 16%, transparent); color:var(--bronze); }
+  .result-pill.bye{ background:var(--surface-2); color:var(--muted); font-size:9px; }
 
   /* team detail */
   .team-header{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
@@ -301,6 +313,8 @@
               <th data-key="rank">#</th>
               <th data-key="name">Team</th>
               <th class="num" data-key="rtg">Rating</th>
+              <th class="num live-col" data-key="actualMp">MP</th>
+              <th class="num live-col" data-key="actualRank">Rank</th>
               <th class="num" data-key="pGold">Gold</th>
               <th class="num" data-key="pSilver">Silver</th>
               <th class="num" data-key="pBronze">Bronze</th>
@@ -308,7 +322,7 @@
               <th class="num" data-key="pTop8">Top 8</th>
               <th class="num" data-key="expRank">Exp. rank</th>
             </tr></thead>
-            <tbody id="lb-tbody"><tr><td colspan="9" class="empty-note">Loading standings…</td></tr></tbody>
+            <tbody id="lb-tbody"><tr><td colspan="11" class="empty-note">Loading standings…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -455,6 +469,7 @@
     if (!d) { document.getElementById("status-text").textContent = "Waiting for forecast data…"; return; }
 
     document.getElementById("status-text").textContent = "Live · last forecast " + timeAgo(d.generatedAt);
+    document.body.classList.toggle("live", d.asOfRound > 0);
     const label = d.tournamentId.endsWith("women") ? "Women" : "Open";
     document.getElementById("lb-title").textContent = d.name;
     document.getElementById("lb-meta").textContent =
@@ -557,6 +572,8 @@
         el("td", { class: "rank-cell" }, "#" + t.rank),
         el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
         el("td", { class: "num" }, String(t.rtg ?? "—")),
+        el("td", { class: "num live-col" }, t.actualMp != null ? String(t.actualMp) : "—"),
+        el("td", { class: "num live-col" }, t.actualRank != null ? "#" + t.actualRank : "—"),
         el("td", { class: "num" }, fmtPct(t.pGold)),
         el("td", { class: "num" }, fmtPct(t.pSilver)),
         el("td", { class: "num" }, fmtPct(t.pBronze)),
@@ -566,7 +583,7 @@
       );
       tbody.append(tr);
     }
-    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 9, class: "empty-note" }, "No teams match your search.")));
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 11, class: "empty-note" }, "No teams match your search.")));
   }
   function medalCell(p) {
     const wrap = el("span", {});
@@ -614,6 +631,10 @@
         tile("Expected match points", t.expMp.toFixed(1) + ` / ${d.numRounds * 2}`, `top-8 ${fmtPct0(t.pTop8)} · top-16 ${fmtPct0(t.pTop16)}`),
       ),
     );
+    if (t.roundResults && t.roundResults.length) {
+      body.append(roundResultsPanel(t));
+    }
+
     const panel = el("div", { class: "panel" },
       el("div", { class: "panel-head" }, el("h2", {}, "Roster")),
       rosterGrid(t.roster));
@@ -635,6 +656,46 @@
         el("div", { class: "p-rtg" }, p.rating ? p.rating + " · " + p.fed : p.fed)));
     }
     return g;
+  }
+  const RESULT_LABEL = { "1-0": "1–0", "1/2-1/2": "½–½", "0-1": "0–1" };
+  function roundResultsPanel(t) {
+    const panel = el("div", { class: "panel" },
+      el("div", { class: "panel-head" }, el("h2", {}, "Results so far"),
+        el("div", { class: "panel-sub" }, "Round-by-round record from chess-results.com")));
+    const table = el("table", {},
+      el("thead", {}, el("tr", {},
+        el("th", { style: "width:34px;" }, "Rd"),
+        el("th", {}, "Opponent"),
+        el("th", {}, "Result"),
+        el("th", { class: "num" }, "Score"),
+        el("th", {}, ""),
+      )),
+      el("tbody"));
+    const tb = table.querySelector("tbody");
+    for (const rr of t.roundResults) {
+      const boardRows = el("div", { class: "board-rows" });
+      for (const b of (rr.boards || [])) {
+        boardRows.append(el("div", { class: "board-row" },
+          el("div", {}, "Bd " + b.boardNo),
+          el("div", { class: "side" }, el("span", { class: "pname" }, b.ownIsWhite ? b.ownName : b.oppName), el("span", { class: "prtg" }, b.ownIsWhite ? b.ownRating : b.oppRating)),
+          el("div", { style: "text-align:center; font-family:'IBM Plex Mono'; font-size:12.5px;" }, RESULT_LABEL[b.result] || "—"),
+          el("div", { class: "side right" }, el("span", { class: "pname" }, b.ownIsWhite ? b.oppName : b.ownName), el("span", { class: "prtg" }, b.ownIsWhite ? b.oppRating : b.ownRating)),
+          el("div", {}, ""),
+        ));
+      }
+      const tr = el("tr", {},
+        el("td", { class: "rank-cell" }, "#" + rr.round),
+        el("td", {}, rr.isBye ? el("span", { class: "meta" }, "— bye —")
+          : el("span", {}, el("span", { class: "fed-chip" }, rr.opponentFed), rr.opponentName)),
+        el("td", {}, el("span", { class: "result-pill " + (rr.isBye ? "bye" : rr.result) }, rr.isBye ? "B" : rr.result)),
+        el("td", { class: "num" }, rr.isBye ? "—" : fmtGamePts(rr.ownGamePts) + "–" + fmtGamePts(rr.oppGamePts)),
+        el("td", {}, rr.boards && rr.boards.length ? mkBtn("Boards", () => boardRows.classList.toggle("open"), "ghost") : ""),
+      );
+      tb.append(tr);
+      tb.append(el("tr", {}, el("td", { colspan: 5, style: "padding:0; border:none;" }, boardRows)));
+    }
+    panel.append(el("div", { class: "table-wrap" }, table));
+    return panel;
   }
   function rankDistSvg(t, numTeams) {
     const w = 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
@@ -693,7 +754,9 @@
           el("th", { style: "width:34px;" }, "#"),
           el("th", {}, "Player"),
           el("th", {}, "Federation"),
-          el("th", { class: "num" }, "TPR"),
+          el("th", { class: "num" }, "Forecast TPR"),
+          el("th", { class: "num live-col" }, "Actual TPR"),
+          el("th", { class: "num live-col" }, "Games"),
           el("th", { class: "num" }, "Medal chance"),
         )),
         el("tbody"));
@@ -704,6 +767,8 @@
           el("td", {}, el("span", { class: "team-name" }, p.name)),
           el("td", {}, el("span", { class: "fed-chip" }, p.fed), p.team),
           el("td", { class: "num" }, String(p.tpr)),
+          el("td", { class: "num live-col" }, p.actualTpr != null ? String(p.actualTpr) : "—"),
+          el("td", { class: "num live-col" }, p.actualGames != null ? String(p.actualGames) : "—"),
           el("td", { class: "num" }, medalCell(p.pMedal))));
       });
       if (!rows.length) card.append(el("p", { class: "empty-note" }, "Not enough simulated 8+ game samples yet."));
@@ -986,6 +1051,7 @@
     active: false, teams: [], byNo: new Map(), rosters: new Map(), teamData: new Map(),
     matchPoints: new Map(), history: new Map(), playerStats: new Map(),
     round: 0, numRounds: 11, pairings: [], results: new Map(), roundSnapshots: [],
+    seededThroughRound: 0,
     rng: Math.random,
   };
 
@@ -1013,7 +1079,51 @@
     Sim.history = new Map(Sim.teams.map(t => [t.no, []]));
     Sim.playerStats = new Map();
     Sim.roundSnapshots = [];
+
+    // Real rounds already played can't be reproduced by the synthetic
+    // Swiss-pairing algorithm (real pairings depend on the actual arbiter
+    // software and any manual corrections) -- ingest them verbatim first,
+    // exactly mirroring apply_real_round on the Python side, then let
+    // makePairings/simulateMatch take over from the first unplayed round.
+    const real = d.realRounds || {};
+    const realRoundNums = Object.keys(real).map(Number).sort((a, b) => a - b);
+    for (const rd of realRoundNums) {
+      Sim.round = rd;
+      applyRealRoundToSim(real[String(rd)]);
+    }
+    Sim.seededThroughRound = Sim.round;
     startRound();
+  }
+
+  function applyRealRoundToSim(matches) {
+    const remainingAfter = Sim.numRounds - Sim.round;
+    matches.forEach(m => {
+      const a = Sim.byNo.get(m.teamA);
+      const cmpA = Sim.matchPoints.get(m.teamA);
+      if (m.isBye) {
+        Sim.matchPoints.set(m.teamA, cmpA + 2); a.matchPoints = cmpA + 2; a.hadBye = true;
+        Sim.history.get(m.teamA).push({ opponentNo: null, gamePoints: 4, cmpBefore: cmpA, remainingAfter, kind: "bye" });
+        return;
+      }
+      const b = Sim.byNo.get(m.teamB);
+      const cmpB = Sim.matchPoints.get(m.teamB);
+      Sim.matchPoints.set(m.teamA, cmpA + m.teamAMatchPts); Sim.matchPoints.set(m.teamB, cmpB + m.teamBMatchPts);
+      a.matchPoints = cmpA + m.teamAMatchPts; b.matchPoints = cmpB + m.teamBMatchPts;
+      a.opponents.add(m.teamB); b.opponents.add(m.teamA);
+      if (m.teamAWhiteOdd) { a.whiteOddCount++; b.whiteEvenCount++; } else { b.whiteOddCount++; a.whiteEvenCount++; }
+      Sim.history.get(m.teamA).push({ opponentNo: m.teamB, gamePoints: m.teamAGamePts, cmpBefore: cmpA, remainingAfter, kind: "played" });
+      Sim.history.get(m.teamB).push({ opponentNo: m.teamA, gamePoints: m.teamBGamePts, cmpBefore: cmpB, remainingAfter, kind: "played" });
+      for (const g of (m.boards || [])) {
+        if (g.result !== "1-0" && g.result !== "0-1" && g.result !== "1/2-1/2") continue;
+        const whiteTeam = g.whiteTeam, blackTeam = whiteTeam === m.teamA ? m.teamB : m.teamA;
+        const [wS, bS] = scoreFor(g.result);
+        recordPlayerResult(whiteTeam, g.boardNo, { name: g.whiteName, fideId: null, title: null }, wS, g.blackRating);
+        recordPlayerResult(blackTeam, g.boardNo, { name: g.blackName, fideId: null, title: null }, bS, g.whiteRating);
+      }
+    });
+    const tb = computeTiebreaks(Sim.history, Sim.matchPoints);
+    const ranking = rankTeams(Sim.matchPoints, tb);
+    Sim.roundSnapshots.push({ round: Sim.round, ranking, matchPoints: new Map(Sim.matchPoints), tiebreaks: tb });
   }
 
   function startRound() {
@@ -1234,6 +1344,10 @@
         el("div", { class: "meta" }, finished ? "Tournament complete" : "Review or override results, then confirm to advance")));
     if (!finished) banner.append(mkBtn("Confirm round & advance →", confirmRound, "primary"));
     body.append(banner);
+    if (Sim.seededThroughRound > 0) {
+      body.append(el("p", { class: "empty-note" },
+        `Rounds 1–${Sim.seededThroughRound} are the real results already played; simulating from round ${Sim.seededThroughRound + 1} onward.`));
+    }
 
     if (!finished) Sim.pairings.forEach((p, idx) => body.append(renderMatchCard(p, idx)));
     body.append(renderStandingsPanel());
