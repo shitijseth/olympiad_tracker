@@ -628,7 +628,7 @@
   function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
   function rosterGrid(roster) {
     const g = el("div", { class: "roster-grid" });
-    for (const p of (roster || []).sort((a, b) => a.board - b.board)) {
+    for (const p of (roster || []).slice().sort((a, b) => a.board - b.board)) {
       g.append(el("div", { class: "roster-card" },
         el("div", { class: "board-no" }, p.board <= 4 ? "Board " + p.board : "Reserve"),
         el("div", { class: "p-name" }, (p.title ? p.title + " " : "") + p.name),

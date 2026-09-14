@@ -8,7 +8,9 @@ cannot load the hosted artifact URL directly. Instead, this script:
   1. Copies the real dashboard.html unmodified except for one shim: a fake
      `window.claude.use("db")` that serves the same JSON documents from
      data/artifact_export/*.json that the real artifact db would return
-     (see chessolympiad/report/export_artifact_data.py).
+     (see chessolympiad/report/export_artifact_data.py), deep-frozen to
+     match the real capability's documented contract ("Delivered snapshots
+     and their data() are frozen").
   2. Serves that copy over a local HTTP server (fetch() needs http://, not
      file://).
   3. Drives it with headless Chromium: every nav tab, a section switch, and
@@ -39,6 +41,18 @@ DASHBOARD_SRC = ROOT / "ui" / "artifact" / "dashboard.html"
 EXPORT_DIR = ROOT / "data" / "artifact_export"
 
 MOCK_DB_SHIM = """<script>
+// The real db capability's spec (db.d.ts) is explicit: "Delivered snapshots
+// and their data() are frozen." Deep-freezing here too is deliberate, not
+// incidental -- it caught a real bug (rosterGrid() sorting t.roster in
+// place, which throws TypeError on a frozen array in strict mode) that a
+// plain mutable mock silently let through.
+function deepFreeze(obj) {
+  if (obj && typeof obj === "object" && !Object.isFrozen(obj)) {
+    Object.values(obj).forEach(deepFreeze);
+    Object.freeze(obj);
+  }
+  return obj;
+}
 window.claude = {
   use: async (cap) => {
     if (cap !== "db") return null;
@@ -47,7 +61,7 @@ window.claude = {
         onSnapshot: (cb, errCb) => {
           const id = path.split("/")[1];
           fetch("data/" + id + ".json").then(r => r.json()).then(json => {
-            cb({ exists: true, data: () => json });
+            cb({ exists: true, data: () => deepFreeze(json) });
           }).catch(e => { if (errCb) errCb(e); });
           return () => {};
         }
