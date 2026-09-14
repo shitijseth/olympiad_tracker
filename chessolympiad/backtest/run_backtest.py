@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chessolympiad.simulate.loader import load_teams
-from chessolympiad.simulate.tiebreak import RoundRecord, compute_tiebreaks, rank_teams
+from chessolympiad.simulate.loader import load_real_rounds, load_teams
+from chessolympiad.simulate.real_standings import compute_real_snapshot
 from chessolympiad.simulate.tournament import TeamInfo, run_monte_carlo
 
 
@@ -50,33 +50,16 @@ def build_rosters_from_round1(conn, tournament_id: str) -> dict[int, list[dict]]
 
 
 def compute_actual_final_standings(conn, tournament_id: str) -> list[int]:
-    match_points: dict[int, int] = {}
-    history: dict[int, list[RoundRecord]] = {}
-    rounds = [
-        r["round"]
-        for r in conn.execute(
-            "SELECT DISTINCT round FROM matches WHERE tournament_id = ? ORDER BY round", (tournament_id,)
-        ).fetchall()
-    ]
-    num_rounds = len(rounds)
-    for idx, rd in enumerate(rounds):
-        remaining_after = num_rounds - idx - 1
-        rows = conn.execute(
-            "SELECT * FROM matches WHERE tournament_id = ? AND round = ?", (tournament_id, rd)
-        ).fetchall()
-        for r in rows:
-            a, b = r["team_a_no"], r["team_b_no"]
-            match_points.setdefault(a, 0)
-            match_points.setdefault(b, 0)
-            history.setdefault(a, [])
-            history.setdefault(b, [])
-            cmp_a, cmp_b = match_points[a], match_points[b]
-            match_points[a] += r["team_a_match_pts"]
-            match_points[b] += r["team_b_match_pts"]
-            history[a].append(RoundRecord(opponent_no=b, game_points=r["team_a_game_pts"], cmp_before=cmp_a, remaining_rounds_after=remaining_after))
-            history[b].append(RoundRecord(opponent_no=a, game_points=r["team_b_game_pts"], cmp_before=cmp_b, remaining_rounds_after=remaining_after))
-    tiebreaks = compute_tiebreaks(history, match_points)
-    return rank_teams(match_points, tiebreaks)
+    """Real final ranking of a COMPLETED historical event, via the same
+    apply_real_round machinery the live dashboard uses mid-event (see
+    simulate.real_standings) -- num_rounds is the count of real rounds
+    ingested, which is only correct once the event is actually over.
+    """
+    teams = load_teams(conn, tournament_id)
+    rosters = build_rosters_from_round1(conn, tournament_id)
+    real_rounds = load_real_rounds(conn, tournament_id)
+    _state, standings = compute_real_snapshot(teams, rosters, real_rounds, num_rounds=len(real_rounds))
+    return sorted(standings.keys(), key=lambda tn: standings[tn]["rank"])
 
 
 @dataclass

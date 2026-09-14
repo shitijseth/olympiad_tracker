@@ -11,6 +11,13 @@ import json
 from pathlib import Path
 
 from chessolympiad.data import db
+from chessolympiad.simulate.loader import load_real_rounds, load_rosters, load_teams
+from chessolympiad.simulate.real_standings import (
+    compute_real_snapshot,
+    real_player_stats,
+    real_round_history,
+    real_rounds_for_replay,
+)
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "data" / "artifact_export"
 
@@ -36,6 +43,24 @@ def export_section(conn, tournament_id: str) -> dict:
             {"board": r["board_no"], "name": r["name"], "title": r["title"], "rating": r["rating"], "fed": r["federation"], "fideId": r["fide_id"]}
         )
 
+    # Real (not simulated) standings/history, once at least one round has
+    # actually been played -- as_of_round stays 0 pre-event, in which case
+    # every one of these collections is empty and the fields below are
+    # simply omitted from each team/board entry.
+    real_rounds = load_real_rounds(conn, tournament_id)
+    real_standings: dict[int, dict] = {}
+    round_history: dict[int, list[dict]] = {}
+    real_pstats: dict[tuple[int, int, str], dict] = {}
+    if real_rounds:
+        typed_teams = load_teams(conn, tournament_id)
+        snapshot_rosters = load_rosters(conn, tournament_id, adaptive=False)
+        snapshot_state, real_standings = compute_real_snapshot(
+            typed_teams, snapshot_rosters, real_rounds, num_rounds=t["num_rounds"]
+        )
+        team_names = {tm.team_no: {"fed": tm.federation, "name": tm.team_name} for tm in typed_teams}
+        round_history = real_round_history(conn, tournament_id, team_names)
+        real_pstats = real_player_stats(snapshot_state)
+
     teams = []
     for r in conn.execute(
         """
@@ -45,6 +70,7 @@ def export_section(conn, tournament_id: str) -> dict:
         """,
         (tournament_id, run["run_id"]),
     ):
+        standing = real_standings.get(r["team_no"])
         teams.append({
             "no": r["team_no"], "fed": r["federation"], "name": r["team_name"],
             "rtg": r["rating_avg"], "captain": r["captain"], "seed": r["initial_rank"],
@@ -54,6 +80,10 @@ def export_section(conn, tournament_id: str) -> dict:
             "expRank": round(r["expected_rank"], 1), "expMp": round(r["expected_match_pts"], 1),
             "rankStd": round(r["rank_std"], 1),
             "roster": rosters.get(r["team_no"], []),
+            # Real results so far -- absent/None pre-event (as_of_round=0).
+            "actualMp": standing["mp"] if standing else None,
+            "actualRank": standing["rank"] if standing else None,
+            "roundResults": round_history.get(r["team_no"], []),
         })
 
     boards: dict[str, list[dict]] = {}
@@ -68,10 +98,16 @@ def export_section(conn, tournament_id: str) -> dict:
         key = str(row["board_no"])
         lst = boards.setdefault(key, [])
         if len(lst) < 15:
-            lst.append({
+            entry = {
                 "fed": row["federation"], "team": row["team_name"], "name": row["name"],
                 "tpr": round(row["expected_tpr"]), "pMedal": round(row["p_board_medal"], 4),
-            })
+            }
+            real = real_pstats.get((row["team_no"], row["board_no"], row["player_key"]))
+            if real and real["games"] > 0:
+                entry["actualGames"] = real["games"]
+                entry["actualScore"] = real["score"]
+                entry["actualTpr"] = real["tpr"]
+            lst.append(entry)
 
     ratings = [r["rating"] for r in conn.execute(
         "SELECT rating FROM players WHERE tournament_id=? AND rating IS NOT NULL AND rating>0", (tournament_id,)
@@ -98,6 +134,7 @@ def export_section(conn, tournament_id: str) -> dict:
         "iterations": run["iterations"],
         "teams": teams,
         "boards": boards,
+        "realRounds": real_rounds_for_replay(conn, tournament_id) if real_rounds else {},
         "stats": {
             "avgRating": round(sum(ratings) / len(ratings)) if ratings else None,
             "minRating": min(ratings) if ratings else None,
