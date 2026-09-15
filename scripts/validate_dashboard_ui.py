@@ -93,6 +93,8 @@ def build_harness(tmp_dir: Path) -> Path:
     for f in EXPORT_DIR.glob("*.json"):
         shutil.copy(f, data_dir / f.name)
 
+    shutil.copytree(DASHBOARD_SRC.parent / "assets", tmp_dir / "assets")
+
     content = DASHBOARD_SRC.read_text(encoding="utf-8")
     idx = content.index("<script>")
     content = content[:idx] + MOCK_DB_SHIM + content[idx:]
@@ -146,6 +148,9 @@ def run_checks(base_url: str):
         page.goto(base_url, wait_until="networkidle", timeout=20000)
         page.wait_for_function("document.querySelectorAll('#lb-table tbody tr').length > 5", timeout=15000)
         page.wait_for_timeout(300)
+
+        check("tournament logo image loaded", page.evaluate("document.querySelector('.brand-logo').naturalWidth > 0"))
+        check("ChessBase India logo image loaded", page.evaluate("document.querySelector('.broadcast-logo').naturalWidth > 0"))
 
         def check_every_team_row_renders_roster(section_label):
             page.click(".nav-btn[data-view='leaderboard']")

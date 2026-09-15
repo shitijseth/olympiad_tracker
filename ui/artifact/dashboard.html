@@ -1,35 +1,19 @@
 <title>Samarkand 2026</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-  /* Palette matched to the official 46th Olympiad site (chessolympiad2026.fide.com):
-     deep navy #1D1E3E, gold/ochre #AD8C49 & #C3A35E, warm charcoal #221E20,
-     sand #E7E5DF, taupe #8D7663 -- and their display face, Host Grotesk. */
+  /* Palette sampled directly from the official Samarkand 2026 broadcast
+     overlay pack (stream graphics for the event's ChessBase India
+     broadcast): deep navy ground #0B1B2B, warm metallic gold accent
+     #C9A876, cream label-chip #EFEFEB -- a fixed broadcast identity, not a
+     light/dark toggle, so it's set unconditionally on :root. */
   :root{
-    --ground:#E7E5DF; --surface:#FFFFFF; --surface-2:#F1EFE9;
-    --line:#D9D3C4; --text:#221E20; --muted:#79705F;
-    --accent:#AD8C49; --accent-strong:#8A6F39; --accent-soft:#F2E8D2;
-    --gold:#AD8C49; --silver:#8B877E; --bronze:#A9552A;
-    --navy:#1D1E3E;
-    --shadow: 0 1px 2px rgba(34,30,32,.07), 0 8px 24px rgba(34,30,32,.07);
+    --ground:#0B1B2B; --surface:#132A40; --surface-2:#1A3650;
+    --line:rgba(201,168,118,.28); --text:#F1ECE0; --muted:#93A6B8;
+    --accent:#C9A876; --accent-strong:#E3CD97; --accent-soft:rgba(201,168,118,.16);
+    --gold:#D4AF61; --silver:#B7C1CB; --bronze:#C97D4B;
+    --navy:#0B1B2B;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 14px 34px rgba(0,0,0,.4);
     --radius:14px;
-  }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --ground:#1D1E3E; --surface:#262848; --surface-2:#2F3157;
-      --line:#3E4066; --text:#EDEAE2; --muted:#A39D8E;
-      --accent:#C3A35E; --accent-strong:#E0C27E; --accent-soft:#33355C;
-      --gold:#D4B36A; --silver:#B7B7B0; --bronze:#C97D4B;
-      --navy:#141530;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
-    }
-  }
-  :root[data-theme="dark"]{
-    --ground:#1D1E3E; --surface:#262848; --surface-2:#2F3157;
-    --line:#3E4066; --text:#EDEAE2; --muted:#A39D8E;
-    --accent:#C3A35E; --accent-strong:#E0C27E; --accent-soft:#33355C;
-    --gold:#D4B36A; --silver:#B7B7B0; --bronze:#C97D4B;
-    --navy:#141530;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
   }
 
   *{box-sizing:border-box;}
@@ -55,15 +39,11 @@
     display:flex; flex-direction:column; gap:22px;
     padding:24px 18px; position:sticky; top:0; height:100vh; overflow-y:auto;
   }
-  .brand{ display:flex; flex-direction:column; gap:4px; }
-  .brand-mark{
-    width:36px; height:36px; border-radius:9px;
-    background:linear-gradient(155deg, var(--accent), var(--accent-strong));
-    display:flex; align-items:center; justify-content:center;
-    font-family:"Host Grotesk"; font-weight:700; color:var(--navy); font-size:15px;
-  }
-  .brand-name{ font-family:"Host Grotesk"; font-weight:600; font-size:16.5px; margin-top:8px; }
-  .brand-sub{ color:var(--muted); font-size:12px; }
+  .brand{ display:flex; flex-direction:column; gap:10px; }
+  .brand-logo{ width:180px; max-width:100%; height:auto; display:block; }
+  .brand-sub{ color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; font-weight:600; }
+  .brand-hr{ height:2px; border:none; margin:2px 0 0;
+    background:linear-gradient(90deg, var(--accent) 0%, transparent 85%); }
 
   .section-switch{ display:flex; flex-direction:column; gap:6px; }
   .rail-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); font-weight:600; margin-bottom:2px;}
@@ -73,9 +53,9 @@
     display:flex; align-items:center; justify-content:space-between; gap:8px;
   }
   .switch-btn:hover{ background:var(--surface-2); }
-  .switch-btn.active{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-strong); font-weight:600; }
+  .switch-btn.active{ background:var(--accent); border-color:var(--accent); color:var(--navy); font-weight:700; }
   .switch-btn .n{ font-family:"IBM Plex Mono"; font-size:11px; color:var(--muted); }
-  .switch-btn.active .n{ color:var(--accent-strong); }
+  .switch-btn.active .n{ color:var(--navy); opacity:.75; }
 
   .rail-card{
     border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--ground);
@@ -94,7 +74,14 @@
     padding:8px 10px; border-radius:9px; cursor:pointer; font-size:13px;
   }
   .nav-btn:hover{ background:var(--surface-2); color:var(--text); }
-  .nav-btn.active{ color:var(--text); background:var(--surface-2); }
+  .nav-btn.active{ color:var(--accent-strong); background:var(--accent-soft); font-weight:700; box-shadow:inset 2px 0 0 var(--accent); }
+
+  .rail-broadcast{
+    display:flex; flex-direction:column; gap:8px; align-items:flex-start;
+    padding-top:14px; border-top:1px solid var(--line);
+  }
+  .rail-broadcast span{ font-size:10.5px; color:var(--muted); line-height:1.4; }
+  .broadcast-logo{ height:26px; width:auto; max-width:100%; opacity:.92; }
 
   /* ---------- main ---------- */
   .main{ flex:1; min-width:0; padding:30px 36px 60px; max-width:1280px; }
@@ -242,9 +229,9 @@
 <div class="app">
   <aside class="rail">
     <div class="brand">
-      <div class="brand-mark">S26</div>
-      <div class="brand-name">Samarkand 2026</div>
-      <div class="brand-sub">46th Chess Olympiad forecast</div>
+      <img class="brand-logo" src="assets/logo-samarkand2026.png" alt="46th FIDE Chess Olympiad — Samarkand 2026">
+      <div class="brand-sub">Medal forecast tracker</div>
+      <hr class="brand-hr">
     </div>
 
     <div class="section-switch">
@@ -268,6 +255,11 @@
       <button class="nav-btn" data-view="stats">Field stats</button>
       <button class="nav-btn" data-view="simulate">Simulate</button>
     </nav>
+
+    <div class="rail-broadcast">
+      <span>Styled after the official broadcast by</span>
+      <img src="assets/logo-chessbase-india.png" alt="ChessBase India" class="broadcast-logo">
+    </div>
   </aside>
 
   <main class="main">
@@ -383,7 +375,8 @@
 
     <footer class="credit">
       Monte Carlo forecast · Davidson outcome model calibrated on 12,779 real 2022+2024 Olympiad games ·
-      data synced from chess-results.com · not affiliated with FIDE.
+      data synced from chess-results.com · visual style references the official broadcast ·
+      not affiliated with FIDE or ChessBase.
     </footer>
   </main>
 </div>

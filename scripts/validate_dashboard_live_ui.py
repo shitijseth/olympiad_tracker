@@ -16,6 +16,7 @@ Usage:
 
 import http.server
 import json
+import shutil
 import sys
 import tempfile
 import threading
@@ -158,6 +159,8 @@ def build_harness(tmp_dir: Path) -> Path:
     (data_dir / "2026-open.json").write_text(json.dumps(payload), encoding="utf-8")
     (data_dir / "2026-women.json").write_text(json.dumps(payload), encoding="utf-8")
 
+    shutil.copytree(DASHBOARD_SRC.parent / "assets", tmp_dir / "assets")
+
     content = DASHBOARD_SRC.read_text(encoding="utf-8")
     idx = content.index("<script>")
     content = content[:idx] + MOCK_DB_SHIM + content[idx:]
@@ -209,6 +212,8 @@ def run_checks(base_url: str):
         page.wait_for_function("document.querySelectorAll('#lb-table tbody tr').length > 0", timeout=15000)
         page.wait_for_timeout(300)
 
+        check("tournament logo image loaded", page.evaluate("document.querySelector('.brand-logo').naturalWidth > 0"))
+        check("ChessBase India logo image loaded", page.evaluate("document.querySelector('.broadcast-logo').naturalWidth > 0"))
         check("body gets the 'live' class once asOfRound > 0", page.evaluate("document.body.classList.contains('live')"))
         alpha_row = next(
             page.locator("#lb-table tbody tr").nth(i).inner_text()

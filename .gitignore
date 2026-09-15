@@ -4,3 +4,9 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 data/olympiad.db
+
+# Design reference material the user dropped in (hundreds of MB: a PSD +
+# its export zip) -- source for ui/artifact/assets/*.png, not itself
+# project source; too large for git.
+/FIDE Olympiad 2026/
+/FIDE Olympiad 2026-*.zip
