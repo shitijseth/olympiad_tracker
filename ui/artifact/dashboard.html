@@ -137,9 +137,6 @@
   .medal-pill.gold{ background:color-mix(in srgb, var(--gold) 18%, transparent); color:var(--gold); }
   .medal-pill.silver{ background:color-mix(in srgb, var(--silver) 18%, transparent); color:var(--silver); }
   .medal-pill.bronze{ background:color-mix(in srgb, var(--bronze) 18%, transparent); color:var(--bronze); }
-  .bar-track{ width:64px; height:6px; border-radius:99px; background:var(--surface-2); overflow:hidden; display:inline-block; vertical-align:middle;}
-  .bar-fill{ height:100%; background:var(--accent); border-radius:99px; }
-
   .empty-note{ color:var(--muted); font-size:12.5px; padding:14px 0; }
   /* Real-results columns/panels only make sense once at least one round has actually been
      played -- hidden by default, revealed by toggling .live on an ancestor once asOfRound>0. */
@@ -310,9 +307,8 @@
               <th class="num" data-key="pBronze">Bronze</th>
               <th class="num" data-key="pAnyMedal">Any medal</th>
               <th class="num" data-key="pTop8">Top 8</th>
-              <th class="num" data-key="expRank">Exp. rank</th>
             </tr></thead>
-            <tbody id="lb-tbody"><tr><td colspan="11" class="empty-note">Loading standings…</td></tr></tbody>
+            <tbody id="lb-tbody"><tr><td colspan="10" class="empty-note">Loading standings…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -568,23 +564,13 @@
         el("td", { class: "num" }, fmtPct(t.pGold)),
         el("td", { class: "num" }, fmtPct(t.pSilver)),
         el("td", { class: "num" }, fmtPct(t.pBronze)),
-        el("td", { class: "num" }, medalCell(t.pAnyMedal)),
+        el("td", { class: "num" }, fmtPct(t.pAnyMedal)),
         el("td", { class: "num" }, fmtPct(t.pTop8)),
-        el("td", { class: "num" }, t.expRank.toFixed(1)),
       );
       tbody.append(tr);
     }
-    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 11, class: "empty-note" }, "No teams match your search.")));
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 10, class: "empty-note" }, "No teams match your search.")));
   }
-  function medalCell(p) {
-    const wrap = el("span", {});
-    wrap.append(fmtPct(p) + "  ");
-    const track = el("span", { class: "bar-track" });
-    track.append(el("span", { class: "bar-fill", style: `width:${Math.min(100, p * 200)}%` }));
-    wrap.append(track);
-    return wrap;
-  }
-
   document.querySelectorAll("#lb-table th[data-key]").forEach(th => {
     th.addEventListener("click", () => {
       const k = th.dataset.key;
@@ -760,7 +746,7 @@
           el("td", { class: "num" }, String(p.tpr)),
           el("td", { class: "num live-col" }, p.actualTpr != null ? String(p.actualTpr) : "—"),
           el("td", { class: "num live-col" }, p.actualGames != null ? String(p.actualGames) : "—"),
-          el("td", { class: "num" }, medalCell(p.pMedal))));
+          el("td", { class: "num" }, fmtPct(p.pMedal))));
       });
       if (!rows.length) card.append(el("p", { class: "empty-note" }, "Not enough simulated 8+ game samples yet."));
       else card.append(el("div", { class: "table-wrap" }, table));
