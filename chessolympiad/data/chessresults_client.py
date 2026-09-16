@@ -65,6 +65,36 @@ class TournamentMeta:
     teams: list[dict] = field(default_factory=list)
 
 
+def _infer_team_columns(df: "pd.DataFrame", start: int) -> tuple[int, int]:
+    """Fallback for fetch_teams when the header row's column labels are
+    blank: find (fed_col, rtg_col) from the shape of the actual data rows
+    instead. rtg_col is the only column whose values sit in a plausible
+    team-average-rating range across the first several data rows; fed_col
+    is the first short all-caps federation-code column before it (skipping
+    the blank spacer column at index 1 and, per the 2022 Chennai layout, a
+    possible duplicate team-code column -- either one is a valid "FED").
+    """
+    sample = df.iloc[start : start + 10]
+    rtg_col = None
+    for c in range(1, df.shape[1]):
+        vals = pd.to_numeric(sample[c], errors="coerce").dropna()
+        if len(vals) >= max(1, len(sample) - 1) and vals.between(1000, 3200).all():
+            rtg_col = c
+            break
+    if rtg_col is None:
+        raise ValueError("Could not infer RtgAvg column from data rows")
+
+    fed_col = None
+    for c in range(1, rtg_col):
+        vals = sample[c].dropna().astype(str)
+        if len(vals) and vals.str.match(r"^[A-Z]{2,5}\d?$").all():
+            fed_col = c
+            break
+    if fed_col is None:
+        raise ValueError("Could not infer FED column from data rows")
+    return fed_col, rtg_col
+
+
 def fetch_teams(tnr: int) -> TournamentMeta:
     """Team starting-rank list + tournament metadata, via the .xlsx export.
 
@@ -99,9 +129,22 @@ def fetch_teams(tnr: int) -> TournamentMeta:
     # "team code" column, duplicating the "Team" header). Locate columns by
     # label instead of a fixed index: the team-display-name column is
     # always immediately before "RtgAvg", and captain immediately after.
+    #
+    # chess-results.com started serving this header row with every label
+    # but "No." blanked out (confirmed across a live 2026 event and two
+    # long-finished historical ones alike, so it's a site-wide export
+    # change, not a live-tournament quirk) -- fall back to inferring
+    # columns from the first data row itself when that happens: RtgAvg is
+    # the only column in a small team-rating range, and the docstring's
+    # positional relationship (team name right before it, captain right
+    # after) still holds regardless of how many federation/code columns
+    # precede it.
     headers = df.iloc[header_idx].tolist()
-    fed_col = headers.index("FED")
-    rtg_col = headers.index("RtgAvg")
+    try:
+        fed_col = headers.index("FED")
+        rtg_col = headers.index("RtgAvg")
+    except ValueError:
+        fed_col, rtg_col = _infer_team_columns(df, start)
     team_col = rtg_col - 1
     captain_col = rtg_col + 1
 

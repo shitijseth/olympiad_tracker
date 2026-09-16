@@ -150,10 +150,12 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
         [tournament_id, *rounds],
     )
     agg: dict[tuple[int, int, int], list[float]] = {}
-    reported: dict[tuple[int, int, int], bool] = {}
+    total_boards: dict[tuple[int, int, int], int] = {}
+    reported_boards: dict[tuple[int, int, int], int] = {}
     for row in cur.fetchall():
         key = (row["round"], row["team_a_no"], row["team_b_no"])
         a_pts, b_pts = agg.get(key, [0.0, 0.0])
+        total_boards[key] = total_boards.get(key, 0) + 1
         if row["result"] == "1-0":
             w, b = 1.0, 0.0
         elif row["result"] == "0-1":
@@ -163,7 +165,7 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
         else:
             w = b = None
         if w is not None:
-            reported[key] = True
+            reported_boards[key] = reported_boards.get(key, 0) + 1
             if row["white_team_no"] == row["team_a_no"]:
                 a_pts += w
                 b_pts += b
@@ -171,16 +173,25 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
                 a_pts += b
                 b_pts += w
         agg[key] = [a_pts, b_pts]
-        reported.setdefault(key, False)
+
+    # asOfRound (and everything downstream that treats it as "round N is
+    # over": real standings, actualMp/actualRank, the Simulate tab's real-
+    # round replay) means "every team's round-N result is locked in" --
+    # comparing teams on unequal footing (some already showing a round-1
+    # record, most still blank) would be actively misleading. So a round
+    # only gets ANY match rows once every board in the WHOLE round has
+    # reported a result, not per-match: a round with 13 of 101 pairings
+    # decided contributes nothing to `matches` yet, even though those 13
+    # matches are individually fully decided.
+    complete_rounds = {
+        rd for rd in rounds
+        if sum(t for (r, *_), t in total_boards.items() if r == rd)
+        == sum(reported_boards.get(k, 0) for k in total_boards if k[0] == rd)
+    }
 
     match_rows = []
     for (rd, a, b), (a_pts, b_pts) in agg.items():
-        if not reported[(rd, a, b)]:
-            # chess-results.com publishes each round's pairings before any
-            # games are played -- every board comes back with an empty
-            # result. With no board actually reported, 0-0 would otherwise
-            # be scored as a genuine drawn match (1-1); skip it entirely so
-            # a published-but-unplayed round isn't mistaken for a live one.
+        if rd not in complete_rounds:
             continue
         if a_pts > b_pts:
             a_mp, b_mp = 2, 0
