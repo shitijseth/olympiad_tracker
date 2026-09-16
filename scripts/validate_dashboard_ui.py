@@ -166,10 +166,8 @@ def run_checks(base_url: str):
             text = page.locator(f"#view-{view}").inner_text()
             check(f"{view} view shows content", len(text.strip()) > min_len, text[:120])
 
-        check("Rounds view shows 11 round buttons pre-event",
+        check("Rounds view shows 11 round buttons",
               page.locator("#round-switcher button").count() == 11)
-        check("Rounds view shows empty-state note pre-event (no real rounds yet)",
-              "No rounds played yet" in page.locator("#round-matches").inner_text())
 
         # Team detail: click through every single team row (not just one) --
         # a weak "does the view have >20 chars of text" check would pass even

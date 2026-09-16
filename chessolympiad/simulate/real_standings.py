@@ -176,6 +176,76 @@ def real_rounds_for_replay(conn: sqlite3.Connection, tournament_id: str) -> dict
     return out
 
 
+def real_pairings(conn: sqlite3.Connection, tournament_id: str) -> dict[int, list[dict]]:
+    """Published board pairings per round, straight from `games`, regardless
+    of whether any result has been reported yet -- chess-results.com posts
+    each round's board assignments (names, ratings, boards) before a single
+    game finishes, and the Rounds display page should show "who's playing
+    whom" as soon as that's out, board results filling in as they land.
+
+    Deliberately NOT sourced from `matches`/real_rounds_for_replay: that
+    table only ever gets a row once at least one board in the match has
+    reported a result (see _derive_matches), which is exactly what keeps a
+    pairings-only round from being mistaken for a played one everywhere
+    else (asOfRound, the Simulate tab's replay, real standings). This
+    function is for display only and must never feed those.
+    """
+    rounds = [
+        r["round"]
+        for r in conn.execute(
+            "SELECT DISTINCT round FROM games WHERE tournament_id = ? ORDER BY round", (tournament_id,)
+        ).fetchall()
+    ]
+    out: dict[int, list[dict]] = {}
+    for rd in rounds:
+        games = conn.execute(
+            "SELECT * FROM games WHERE tournament_id = ? AND round = ? ORDER BY team_a_no, team_b_no, board_no",
+            (tournament_id, rd),
+        ).fetchall()
+        by_pair: dict[tuple[int, int], list[sqlite3.Row]] = {}
+        for g in games:
+            by_pair.setdefault((g["team_a_no"], g["team_b_no"]), []).append(g)
+
+        round_out = []
+        for (a, b), gs in by_pair.items():
+            board1 = next((g for g in gs if g["board_no"] == 1), None)
+            team_a_white_odd = (board1["white_team_no"] == a) if board1 else True
+            a_pts = b_pts = 0.0
+            any_result = False
+            for g in gs:
+                if g["result"] == "1-0":
+                    w, l = 1.0, 0.0
+                elif g["result"] == "0-1":
+                    w, l = 0.0, 1.0
+                elif g["result"] == "1/2-1/2":
+                    w, l = 0.5, 0.5
+                else:
+                    continue
+                any_result = True
+                if g["white_team_no"] == a:
+                    a_pts, b_pts = a_pts + w, b_pts + l
+                else:
+                    a_pts, b_pts = a_pts + l, b_pts + w
+            round_out.append({
+                "teamA": a, "teamB": b,
+                "hasResults": any_result,
+                "teamAGamePts": a_pts if any_result else None,
+                "teamBGamePts": b_pts if any_result else None,
+                "teamAWhiteOdd": team_a_white_odd,
+                "boards": [
+                    {
+                        "boardNo": g["board_no"], "whiteTeam": g["white_team_no"],
+                        "whiteName": g["white_name"], "whiteRating": g["white_rating"],
+                        "blackName": g["black_name"], "blackRating": g["black_rating"],
+                        "result": g["result"],
+                    }
+                    for g in gs
+                ],
+            })
+        out[rd] = round_out
+    return out
+
+
 def real_player_stats(state: TournamentState) -> dict[tuple[int, int, str], dict]:
     """Real (not simulated) per-player games/score/TPR-so-far, keyed the
     same way as simulate.round.PlayerStat -- (team_no, board_no,

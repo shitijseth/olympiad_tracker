@@ -704,7 +704,8 @@
     const host = document.getElementById("round-matches");
     if (!d) { switcher.innerHTML = ""; host.innerHTML = ""; return; }
 
-    const roundsWithData = Object.keys(d.realRounds || {}).map(Number).sort((a, b) => a - b);
+    const pairings = d.pairings || {};
+    const roundsWithData = Object.keys(pairings).map(Number).sort((a, b) => a - b);
     const sel = state.roundSel;
     if (sel[state.section] == null || !roundsWithData.includes(sel[state.section])) {
       sel[state.section] = roundsWithData.length ? roundsWithData[roundsWithData.length - 1] : 1;
@@ -727,13 +728,13 @@
 
     host.innerHTML = "";
     if (!roundsWithData.length) {
-      host.append(el("p", { class: "empty-note" }, "No rounds played yet — matches will appear here once Round 1 results are synced."));
+      host.append(el("p", { class: "empty-note" }, "No pairings published yet — matches will appear here as soon as chess-results.com posts Round 1's board assignments."));
       return;
     }
 
     const teamsByNo = new Map(d.teams.map(t => [t.no, t]));
     const q = (document.getElementById("rounds-search").value || "").toLowerCase();
-    let matches = (d.realRounds[rd] || []).slice();
+    let matches = (pairings[rd] || []).slice();
     if (q) {
       matches = matches.filter(m => {
         const a = teamsByNo.get(m.teamA);
@@ -768,9 +769,8 @@
       }
       const tr = el("tr", {},
         el("td", {}, teamA ? el("span", {}, el("span", { class: "fed-chip" }, teamA.fed), teamA.name) : "—"),
-        el("td", { class: "num" }, m.isBye ? "—" : `${fmtGamePts(m.teamAGamePts)}–${fmtGamePts(m.teamBGamePts)} (${m.teamAMatchPts}–${m.teamBMatchPts} MP)`),
-        el("td", {}, m.isBye ? el("span", { class: "meta" }, "— bye —")
-          : (teamB ? el("span", {}, el("span", { class: "fed-chip" }, teamB.fed), teamB.name) : "—")),
+        el("td", { class: "num" }, m.hasResults ? `${fmtGamePts(m.teamAGamePts)}–${fmtGamePts(m.teamBGamePts)}` : el("span", { class: "meta" }, "not yet played")),
+        el("td", {}, teamB ? el("span", {}, el("span", { class: "fed-chip" }, teamB.fed), teamB.name) : "—"),
         el("td", {}, m.boards && m.boards.length ? mkBtn("Boards", () => boardRows.classList.toggle("open"), "ghost") : ""),
       );
       tb.append(tr);

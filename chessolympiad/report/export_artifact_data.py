@@ -14,6 +14,7 @@ from chessolympiad.data import db
 from chessolympiad.simulate.loader import load_real_rounds, load_rosters, load_teams
 from chessolympiad.simulate.real_standings import (
     compute_real_snapshot,
+    real_pairings,
     real_player_stats,
     real_round_history,
     real_rounds_for_replay,
@@ -135,6 +136,12 @@ def export_section(conn, tournament_id: str) -> dict:
         "teams": teams,
         "boards": boards,
         "realRounds": real_rounds_for_replay(conn, tournament_id) if real_rounds else {},
+        # Published pairings, independent of realRounds -- populated as soon
+        # as chess-results.com posts a round's board assignments, even
+        # before any result comes in (see real_pairings' docstring). Used
+        # only by the Rounds display page; realRounds above stays the
+        # sole source for asOfRound/Simulate-replay/live standings.
+        "pairings": real_pairings(conn, tournament_id),
         "stats": {
             "avgRating": round(sum(ratings) / len(ratings)) if ratings else None,
             "minRating": min(ratings) if ratings else None,
