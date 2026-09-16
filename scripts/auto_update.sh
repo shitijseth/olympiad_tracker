@@ -18,7 +18,7 @@ PY=.venv/bin/python
 echo "=== $(date -u +%FT%TZ) starting auto-update ==="
 
 for section in open women; do
-  $PY -m chessolympiad.cli live-update "$section" || echo "WARN: live-update $section failed, continuing"
+  $PY -m chessolympiad.cli live-update "$section" --iterations 20000 || echo "WARN: live-update $section failed, continuing"
 done
 
 if ! $PY -m chessolympiad.report.export_artifact_data; then
