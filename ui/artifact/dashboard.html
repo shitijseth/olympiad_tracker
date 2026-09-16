@@ -248,6 +248,7 @@
       <button class="nav-btn active" data-view="leaderboard">Leaderboard</button>
       <button class="nav-btn" data-view="team">Team detail</button>
       <button class="nav-btn" data-view="boards">Board medals</button>
+      <button class="nav-btn" data-view="rounds">Rounds</button>
       <button class="nav-btn" data-view="stats">Field stats</button>
       <button class="nav-btn" data-view="simulate">Simulate</button>
     </nav>
@@ -337,6 +338,26 @@
       <div id="boards-grid" style="display:flex; flex-direction:column; gap:22px;"></div>
     </section>
 
+    <!-- ============ ROUND RESULTS ============ -->
+    <section class="view" id="view-rounds">
+      <div class="page-head"><div><h1>Round-by-round results</h1>
+        <div class="meta" id="rounds-meta">Head-to-head team matches and board-by-board results, synced from chess-results.com</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Matches</h2>
+            <div class="panel-sub">Click a round below, then "Boards" on any match for the board-by-board breakdown</div>
+          </div>
+          <div class="controls">
+            <input type="search" id="rounds-search" placeholder="Search team or federation…">
+          </div>
+        </div>
+        <div id="round-switcher" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;"></div>
+        <div id="round-matches"></div>
+      </div>
+    </section>
+
     <!-- ============ FIELD STATS ============ -->
     <section class="view" id="view-stats">
       <div class="page-head"><div><h1>Field statistics</h1>
@@ -379,7 +400,7 @@
 (() => {
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
-  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null };
+  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null, roundSel: {} };
 
   const fmtPct = (x) => (x * 100).toFixed(1) + "%";
   const fmtPct0 = (x) => Math.round(x * 100) + "%";
@@ -399,7 +420,7 @@
 
   // ---------------- countdown ----------------
   function tickCountdown() {
-    const start = new Date("2026-09-16T09:00:00Z").getTime();
+    const start = new Date("2026-09-16T10:00:00Z").getTime(); // Round 1: 15:00 Samarkand time (UTC+5)
     const now = Date.now();
     const diff = start - now;
     const cd = document.getElementById("countdown");
@@ -467,6 +488,7 @@
     renderChartMedals(d);
     renderTable(d);
     renderBoards(d);
+    renderRounds(d);
     renderStats(d);
   }
 
@@ -581,6 +603,7 @@
   });
   document.getElementById("lb-search").addEventListener("input", () => renderTable(currentData()));
   document.getElementById("lb-topn").addEventListener("input", () => renderChartMedals(currentData()));
+  document.getElementById("rounds-search").addEventListener("input", () => renderRounds(currentData()));
 
   // ---------------- team detail ----------------
   function selectTeam(no) {
@@ -674,6 +697,89 @@
     panel.append(el("div", { class: "table-wrap" }, table));
     return panel;
   }
+
+  // ---------------- round-by-round results ----------------
+  function renderRounds(d) {
+    const switcher = document.getElementById("round-switcher");
+    const host = document.getElementById("round-matches");
+    if (!d) { switcher.innerHTML = ""; host.innerHTML = ""; return; }
+
+    const roundsWithData = Object.keys(d.realRounds || {}).map(Number).sort((a, b) => a - b);
+    const sel = state.roundSel;
+    if (sel[state.section] == null || !roundsWithData.includes(sel[state.section])) {
+      sel[state.section] = roundsWithData.length ? roundsWithData[roundsWithData.length - 1] : 1;
+    }
+    const rd = sel[state.section];
+
+    switcher.innerHTML = "";
+    for (let r = 1; r <= d.numRounds; r++) {
+      const has = roundsWithData.includes(r);
+      const btn = el("button", { class: "switch-btn" + (r === rd ? " active" : "") }, "Round " + r);
+      if (!has) {
+        btn.disabled = true;
+        btn.style.opacity = ".35";
+        btn.style.cursor = "not-allowed";
+      } else {
+        btn.addEventListener("click", () => { sel[state.section] = r; renderRounds(currentData()); });
+      }
+      switcher.append(btn);
+    }
+
+    host.innerHTML = "";
+    if (!roundsWithData.length) {
+      host.append(el("p", { class: "empty-note" }, "No rounds played yet — matches will appear here once Round 1 results are synced."));
+      return;
+    }
+
+    const teamsByNo = new Map(d.teams.map(t => [t.no, t]));
+    const q = (document.getElementById("rounds-search").value || "").toLowerCase();
+    let matches = (d.realRounds[rd] || []).slice();
+    if (q) {
+      matches = matches.filter(m => {
+        const a = teamsByNo.get(m.teamA);
+        const b = m.teamB != null ? teamsByNo.get(m.teamB) : null;
+        return (a && (a.name.toLowerCase().includes(q) || a.fed.toLowerCase().includes(q))) ||
+               (b && (b.name.toLowerCase().includes(q) || b.fed.toLowerCase().includes(q)));
+      });
+    }
+    matches.sort((x, y) => Math.min(x.teamA, x.teamB ?? Infinity) - Math.min(y.teamA, y.teamB ?? Infinity));
+
+    const table = el("table", {},
+      el("thead", {}, el("tr", {},
+        el("th", {}, "Team A"),
+        el("th", { class: "num" }, "Score"),
+        el("th", {}, "Team B"),
+        el("th", {}, ""),
+      )),
+      el("tbody"));
+    const tb = table.querySelector("tbody");
+    for (const m of matches) {
+      const teamA = teamsByNo.get(m.teamA);
+      const teamB = m.teamB != null ? teamsByNo.get(m.teamB) : null;
+      const boardRows = el("div", { class: "board-rows" });
+      for (const b of (m.boards || [])) {
+        boardRows.append(el("div", { class: "board-row" },
+          el("div", {}, "Bd " + b.boardNo),
+          el("div", { class: "side" }, el("span", { class: "pname" }, b.whiteName), el("span", { class: "prtg" }, b.whiteRating)),
+          el("div", { style: "text-align:center; font-family:'IBM Plex Mono'; font-size:12.5px;" }, RESULT_LABEL[b.result] || "—"),
+          el("div", { class: "side right" }, el("span", { class: "pname" }, b.blackName), el("span", { class: "prtg" }, b.blackRating)),
+          el("div", {}, ""),
+        ));
+      }
+      const tr = el("tr", {},
+        el("td", {}, teamA ? el("span", {}, el("span", { class: "fed-chip" }, teamA.fed), teamA.name) : "—"),
+        el("td", { class: "num" }, m.isBye ? "—" : `${fmtGamePts(m.teamAGamePts)}–${fmtGamePts(m.teamBGamePts)} (${m.teamAMatchPts}–${m.teamBMatchPts} MP)`),
+        el("td", {}, m.isBye ? el("span", { class: "meta" }, "— bye —")
+          : (teamB ? el("span", {}, el("span", { class: "fed-chip" }, teamB.fed), teamB.name) : "—")),
+        el("td", {}, m.boards && m.boards.length ? mkBtn("Boards", () => boardRows.classList.toggle("open"), "ghost") : ""),
+      );
+      tb.append(tr);
+      tb.append(el("tr", {}, el("td", { colspan: 4, style: "padding:0; border:none;" }, boardRows)));
+    }
+    if (!matches.length) tb.append(el("tr", {}, el("td", { colspan: 4, class: "empty-note" }, "No teams match your search.")));
+    host.append(el("div", { class: "table-wrap" }, table));
+  }
+
   function rankDistSvg(t, numTeams) {
     const w = 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
     const mean = t.expRank, sd = Math.max(t.rankStd, 1);

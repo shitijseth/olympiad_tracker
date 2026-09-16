@@ -160,11 +160,16 @@ def run_checks(base_url: str):
         page.wait_for_function("document.getElementById('lb-title').textContent.includes('Open')", timeout=15000)
         page.wait_for_timeout(300)
 
-        for view, min_len in [("boards", 20), ("stats", 20)]:
+        for view, min_len in [("boards", 20), ("rounds", 20), ("stats", 20)]:
             page.click(f".nav-btn[data-view='{view}']")
             page.wait_for_timeout(400)
             text = page.locator(f"#view-{view}").inner_text()
             check(f"{view} view shows content", len(text.strip()) > min_len, text[:120])
+
+        check("Rounds view shows 11 round buttons pre-event",
+              page.locator("#round-switcher button").count() == 11)
+        check("Rounds view shows empty-state note pre-event (no real rounds yet)",
+              "No rounds played yet" in page.locator("#round-matches").inner_text())
 
         # Team detail: click through every single team row (not just one) --
         # a weak "does the view have >20 chars of text" check would pass even
