@@ -150,6 +150,7 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
         [tournament_id, *rounds],
     )
     agg: dict[tuple[int, int, int], list[float]] = {}
+    reported: dict[tuple[int, int, int], bool] = {}
     for row in cur.fetchall():
         key = (row["round"], row["team_a_no"], row["team_b_no"])
         a_pts, b_pts = agg.get(key, [0.0, 0.0])
@@ -162,6 +163,7 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
         else:
             w = b = None
         if w is not None:
+            reported[key] = True
             if row["white_team_no"] == row["team_a_no"]:
                 a_pts += w
                 b_pts += b
@@ -169,9 +171,17 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
                 a_pts += b
                 b_pts += w
         agg[key] = [a_pts, b_pts]
+        reported.setdefault(key, False)
 
     match_rows = []
     for (rd, a, b), (a_pts, b_pts) in agg.items():
+        if not reported[(rd, a, b)]:
+            # chess-results.com publishes each round's pairings before any
+            # games are played -- every board comes back with an empty
+            # result. With no board actually reported, 0-0 would otherwise
+            # be scored as a genuine drawn match (1-1); skip it entirely so
+            # a published-but-unplayed round isn't mistaken for a live one.
+            continue
         if a_pts > b_pts:
             a_mp, b_mp = 2, 0
         elif a_pts < b_pts:
