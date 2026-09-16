@@ -152,12 +152,12 @@ Python engine's aggregate medal probabilities closely (e.g. USA 38.7% vs
 
 The dashboard's actual DOM/UI (not just the extracted engine) is validated
 with Playwright — `scripts/validate_dashboard_ui.py` serves `dashboard.html`
-locally with a mock of the artifact `db` capability (fed the real exported
-forecast JSON) and drives headless Chromium through every tab and a full
-11-round Simulate play-through, failing on any uncaught JS error. This
-caught a real bug (`Element.append()` returning `undefined`, not the
-appended node, silently breaking the Field Stats federation chart on every
-render) before it reached the published artifact.
+locally alongside the real exported forecast JSON (the same static-file
+layout the published artifact uses) and drives headless Chromium through
+every tab and a full 11-round Simulate play-through, failing on any
+uncaught JS error. This caught a real bug (`Element.append()` returning
+`undefined`, not the appended node, silently breaking the Field Stats
+federation chart on every render) before it reached the published artifact.
 
 The live-progress UI (actual MP/rank, round-by-round history, actual TPR,
 Simulate-tab real-round seeding — see "What it does" above) has its own
@@ -212,10 +212,16 @@ python scripts/validate_dashboard_live_ui.py     # the live/in-progress UI, synt
 ```
 
 Reports land in `reports/{tournament_id}_forecast.{md,csv}`. The dashboard
-(`ui/artifact/dashboard.html`) is published as a Claude Artifact and reads
-its data from the artifact's own `db` capability — after generating fresh
-`data/artifact_export/*.json`, re-seed the published artifact via the
-Artifact tool's `write_db` action (see the artifact's URL).
+(`ui/artifact/dashboard.html`) is published as a Claude Artifact and fetches
+its data as a plain static file (`fetch("data/<id>.json")`) published
+alongside the page — deliberately not the artifact `db` capability, which
+requires every reader to be signed in as a member of the owner's org and so
+silently walls off anyone the link is shared with publicly. After
+generating fresh `data/artifact_export/*.json`, re-publish the artifact
+passing both files via the Artifact tool's `files` param, e.g.
+`files: {"data/2026-open.json": "data/artifact_export/2026-open.json", "data/2026-women.json": "data/artifact_export/2026-women.json"}`.
+The page polls both files every 60s, so a tab left open during the event
+picks up new rounds without a manual reload.
 
 ## Project layout
 

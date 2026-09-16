@@ -10,6 +10,11 @@ payload directly -- matching exactly what export_artifact_data.py produces
 once as_of_round > 0 -- so this scenario has a fast, dependency-free
 regression test that doesn't need real mid-event data or a historical DB.
 
+The dashboard fetches this as a plain static file (fetch("data/<id>.json")),
+not the artifact `db` capability (which requires readers to be signed into
+the owner's org -- see validate_dashboard_ui.py's module docstring), so no
+mocking of `window.claude` is needed here either.
+
 Usage:
     python scripts/validate_dashboard_live_ui.py
 """
@@ -26,33 +31,6 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_SRC = ROOT / "ui" / "artifact" / "dashboard.html"
-
-MOCK_DB_SHIM = """<script>
-function deepFreeze(obj) {
-  if (obj && typeof obj === "object" && !Object.isFrozen(obj)) {
-    Object.values(obj).forEach(deepFreeze);
-    Object.freeze(obj);
-  }
-  return obj;
-}
-window.claude = {
-  use: async (cap) => {
-    if (cap !== "db") return null;
-    return {
-      doc: (path) => ({
-        onSnapshot: (cb, errCb) => {
-          const id = path.split("/")[1];
-          fetch("data/" + id + ".json").then(r => r.json()).then(json => {
-            cb({ exists: true, data: () => deepFreeze(json) });
-          }).catch(e => { if (errCb) errCb(e); });
-          return () => {};
-        }
-      })
-    };
-  }
-};
-</script>
-"""
 
 failures = []
 console_errors = []
@@ -162,8 +140,6 @@ def build_harness(tmp_dir: Path) -> Path:
     shutil.copytree(DASHBOARD_SRC.parent / "assets", tmp_dir / "assets")
 
     content = DASHBOARD_SRC.read_text(encoding="utf-8")
-    idx = content.index("<script>")
-    content = content[:idx] + MOCK_DB_SHIM + content[idx:]
     wrapped = (
         '<!doctype html><html><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>\n'

@@ -383,7 +383,7 @@
 (() => {
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
-  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null, unsub: {} };
+  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null };
 
   const fmtPct = (x) => (x * 100).toFixed(1) + "%";
   const fmtPct0 = (x) => Math.round(x * 100) + "%";
@@ -415,30 +415,30 @@
   }
   tickCountdown(); setInterval(tickCountdown, 60000);
 
-  // ---------------- data loading (db capability, falls back to bundled sample) ----------------
+  // ---------------- data loading ----------------
+  // Plain static-file fetch, not the artifact `db` capability: db requires
+  // every reader to be signed in as a member of the owner's org, which
+  // silently walls off anyone the link is shared with who isn't -- exactly
+  // what happened when this was shared publicly (a signed-out viewer got
+  // "Sign in to see this artifact's data" instead of the dashboard). The
+  // forecast JSON is published as a plain supporting file alongside this
+  // page (see the Artifact tool's `files` param / export_artifact_data.py),
+  // so fetch() needs no capability and no sign-in for any viewer. Polled
+  // periodically so a tab left open during the event still picks up new
+  // rounds without a manual reload.
   async function loadSection(id) {
     try {
-      const db = await claude.use("db");
-      if (db) {
-        return await new Promise((resolve) => {
-          const ref = db.doc("forecasts/" + id);
-          let resolved = false;
-          const unsub = ref.onSnapshot((snap) => {
-            if (snap.exists) {
-              state.data[id] = snap.data();
-              if (id === state.section) render();
-              document.getElementById("live-dot").classList.add("pulse");
-              document.getElementById("status-text").textContent =
-                "Live · last forecast " + timeAgo(state.data[id].generatedAt);
-            }
-            if (!resolved) { resolved = true; resolve(state.data[id]); }
-          }, () => { if (!resolved) { resolved = true; resolve(null); } });
-          state.unsub[id] = unsub;
-          setTimeout(() => { if (!resolved) { resolved = true; resolve(null); } }, 9000);
-        });
-      }
-    } catch (e) { /* fall through to null */ }
-    return null;
+      const res = await fetch("data/" + id + ".json", { cache: "no-store" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      state.data[id] = data;
+      if (id === state.section) render();
+      document.getElementById("live-dot").classList.add("pulse");
+      document.getElementById("status-text").textContent = "Live · last forecast " + timeAgo(data.generatedAt);
+      return data;
+    } catch (e) {
+      return null;
+    }
   }
 
   function timeAgo(iso) {
@@ -1363,6 +1363,7 @@
     await Promise.all([loadSection("2026-open"), loadSection("2026-women")]);
     render();
   })();
+  setInterval(() => { loadSection("2026-open"); loadSection("2026-women"); }, 60000);
 })();
 </script>
 

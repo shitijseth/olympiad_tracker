@@ -1,17 +1,16 @@
 """End-to-end UI validation for ui/artifact/dashboard.html, driven by Playwright.
 
-The published dashboard is a private Claude Artifact and reads its data via
-the platform-injected `claude.use("db")` capability, which only exists inside
-an authenticated claude.ai session -- Playwright (or any anonymous browser)
-cannot load the hosted artifact URL directly. Instead, this script:
+The dashboard fetches its forecast data as a plain static file
+(fetch("data/<id>.json")) published alongside the page -- deliberately not
+the artifact `db` capability, which requires every reader to be signed in
+as a member of the owner's org and so silently walls off anyone the link
+is shared with publicly (see the "Sign in to see this artifact's data"
+incident this was built to fix). That means Playwright can drive the real
+file with no mocking at all. This script:
 
-  1. Copies the real dashboard.html unmodified except for one shim: a fake
-     `window.claude.use("db")` that serves the same JSON documents from
-     data/artifact_export/*.json that the real artifact db would return
-     (see chessolympiad/report/export_artifact_data.py), deep-frozen to
-     match the real capability's documented contract ("Delivered snapshots
-     and their data() are frozen").
-  2. Serves that copy over a local HTTP server (fetch() needs http://, not
+  1. Copies the real dashboard.html and data/artifact_export/*.json (as
+     data/<id>.json, matching the published layout) into a scratch dir.
+  2. Serves that dir over a local HTTP server (fetch() needs http://, not
      file://).
   3. Drives it with headless Chromium: every nav tab, a section switch, and
      a full 11-round play-through of the interactive Simulate tab (Start ->
@@ -26,7 +25,6 @@ Usage:
 """
 
 import http.server
-import json
 import shutil
 import sys
 import tempfile
@@ -39,38 +37,6 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_SRC = ROOT / "ui" / "artifact" / "dashboard.html"
 EXPORT_DIR = ROOT / "data" / "artifact_export"
-
-MOCK_DB_SHIM = """<script>
-// The real db capability's spec (db.d.ts) is explicit: "Delivered snapshots
-// and their data() are frozen." Deep-freezing here too is deliberate, not
-// incidental -- it caught a real bug (rosterGrid() sorting t.roster in
-// place, which throws TypeError on a frozen array in strict mode) that a
-// plain mutable mock silently let through.
-function deepFreeze(obj) {
-  if (obj && typeof obj === "object" && !Object.isFrozen(obj)) {
-    Object.values(obj).forEach(deepFreeze);
-    Object.freeze(obj);
-  }
-  return obj;
-}
-window.claude = {
-  use: async (cap) => {
-    if (cap !== "db") return null;
-    return {
-      doc: (path) => ({
-        onSnapshot: (cb, errCb) => {
-          const id = path.split("/")[1];
-          fetch("data/" + id + ".json").then(r => r.json()).then(json => {
-            cb({ exists: true, data: () => deepFreeze(json) });
-          }).catch(e => { if (errCb) errCb(e); });
-          return () => {};
-        }
-      })
-    };
-  }
-};
-</script>
-"""
 
 failures = []
 console_errors = []
@@ -96,8 +62,6 @@ def build_harness(tmp_dir: Path) -> Path:
     shutil.copytree(DASHBOARD_SRC.parent / "assets", tmp_dir / "assets")
 
     content = DASHBOARD_SRC.read_text(encoding="utf-8")
-    idx = content.index("<script>")
-    content = content[:idx] + MOCK_DB_SHIM + content[idx:]
     wrapped = (
         '<!doctype html><html><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1"></head><body>\n'
