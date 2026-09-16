@@ -21,7 +21,15 @@ def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None)
         teams = load_teams(conn, tournament_id)
         rosters = load_rosters(conn, tournament_id)
         num_rounds = get_num_rounds(conn, tournament_id)
-        real_rounds = load_real_rounds(conn, tournament_id)
+        # complete_only=True: the forecast continues synthetic rounds on
+        # top of whatever's replayed here, so a round must be wholly
+        # decided (every team) before it's treated as "real" -- otherwise
+        # a team still mid-match this round would get silently skipped and
+        # re-paired incorrectly once synthetic rounds resume. The live
+        # dashboard's own actual-standings display uses the unfiltered,
+        # per-match version separately (export_artifact_data.py) and isn't
+        # affected by this.
+        real_rounds = load_real_rounds(conn, tournament_id, complete_only=True)
         as_of_round = max(real_rounds.keys()) if real_rounds else 0
 
         team_forecasts, player_forecasts = run_monte_carlo(

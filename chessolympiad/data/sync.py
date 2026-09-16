@@ -174,24 +174,21 @@ def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
                 b_pts += w
         agg[key] = [a_pts, b_pts]
 
-    # asOfRound (and everything downstream that treats it as "round N is
-    # over": real standings, actualMp/actualRank, the Simulate tab's real-
-    # round replay) means "every team's round-N result is locked in" --
-    # comparing teams on unequal footing (some already showing a round-1
-    # record, most still blank) would be actively misleading. So a round
-    # only gets ANY match rows once every board in the WHOLE round has
-    # reported a result, not per-match: a round with 13 of 101 pairings
-    # decided contributes nothing to `matches` yet, even though those 13
-    # matches are individually fully decided.
-    complete_rounds = {
-        rd for rd in rounds
-        if sum(t for (r, *_), t in total_boards.items() if r == rd)
-        == sum(reported_boards.get(k, 0) for k in total_boards if k[0] == rd)
-    }
-
+    # A live dashboard should show each match's result as soon as THAT
+    # match is decided, not wait for the whole round -- one adjourned or
+    # slow-finishing board out of ~100 pairings would otherwise hide every
+    # already-final result for hours. So the gate here is per-MATCH: every
+    # board in *this* pairing must have reported a result (still guarding
+    # against the earlier bug of scoring a still-open board as 0-0), but
+    # different matches in the same round populate independently as each
+    # finishes. asOfRound (computed from whatever rounds have at least one
+    # match row) is therefore a "round N is under way" signal, not "round N
+    # is fully over" -- real standings/ranks built from it are genuinely
+    # live and can still shift as the remaining matches in the round finish.
     match_rows = []
     for (rd, a, b), (a_pts, b_pts) in agg.items():
-        if rd not in complete_rounds:
+        key = (rd, a, b)
+        if reported_boards.get(key, 0) < total_boards[key]:
             continue
         if a_pts > b_pts:
             a_mp, b_mp = 2, 0

@@ -58,6 +58,11 @@ def build_payload():
             {"board": b, "name": f"{name} P{b}", "title": "GM", "rating": 2600 - b * 20, "fed": fed, "fideId": no * 10 + b}
             for b in range(1, 5)
         ]
+        # Give board 1 of each team its own real games/score/TPR so far, to
+        # exercise the roster card's per-player actual-results line.
+        roster[0]["actualGames"] = 2
+        roster[0]["actualScore"] = 1.5 if no == 1 else 1.0
+        roster[0]["actualTpr"] = 2650 + no
         teams.append({
             "no": no, "fed": fed, "name": name, "rtg": 2570, "captain": "Cap", "seed": no,
             "pGold": 0.3, "pSilver": 0.2, "pBronze": 0.1, "pAnyMedal": 0.6, "pCatMedal": 0.1,
@@ -65,6 +70,7 @@ def build_payload():
             "roster": roster,
             "actualMp": {1: 4, 2: 0, 3: 2, 4: 2}[no],
             "actualRank": {1: 1, 2: 4, 3: 2, 4: 2}[no],
+            "actualGamePts": {1: 5.5, 2: 3.0, 3: 4.0, 4: 4.0}[no],
             "roundResults": [
                 {
                     "round": 1, "opponentNo": 2 if no in (1, 2) else 4, "opponentFed": "BBB" if no == 1 else ("AAA" if no == 2 else ("DDD" if no == 3 else "CCC")),
@@ -119,11 +125,19 @@ def build_payload():
         ],
     }
 
+    pairings = {
+        rd: [{"teamA": m["teamA"], "teamB": m["teamB"], "hasResults": True,
+              "teamAGamePts": m["teamAGamePts"], "teamBGamePts": m["teamBGamePts"],
+              "teamAWhiteOdd": m["teamAWhiteOdd"], "boards": m["boards"]}
+             for m in matches]
+        for rd, matches in real_rounds.items()
+    }
+
     return {
         "tournamentId": "2026-open", "name": "Live Test Open", "numRounds": 11, "numTeams": 4,
         "lastSynced": "2026-09-17T00:00:00", "generatedAt": "2026-09-17T00:00:00",
-        "asOfRound": 2, "iterations": 100,
-        "teams": teams, "boards": boards, "realRounds": real_rounds,
+        "asOfRound": 2, "liveRound": 2, "iterations": 100,
+        "teams": teams, "boards": boards, "realRounds": real_rounds, "pairings": pairings,
         "stats": {"avgRating": 2570, "minRating": 2500, "maxRating": 2600, "totalFederations": 4,
                    "ratingHistogram": {"lo": 1000, "hi": 2900, "binWidth": 158.3, "bins": [0] * 12},
                    "fedCounts": {"AAA": 1, "BBB": 1, "CCC": 1, "DDD": 1}},
@@ -197,6 +211,7 @@ def run_checks(base_url: str):
             if "Alpha" in page.locator("#lb-table tbody tr").nth(i).inner_text()
         )
         check("leaderboard row shows actual MP and rank for the leader", "4" in alpha_row and "#1" in alpha_row, alpha_row)
+        check("leaderboard row shows actual game points for the leader", "5" in alpha_row, alpha_row)
 
         # Team detail
         page.click(".nav-btn[data-view='team']")
@@ -207,6 +222,7 @@ def run_checks(base_url: str):
         page.wait_for_timeout(300)
         body_text = page.locator("#team-detail-body").inner_text()
         check("Team detail shows 'Results so far' panel", "Results so far" in body_text, body_text[:200])
+        check("Roster shows a player's own real games/score/TPR so far", "so far" in body_text and "TPR" in body_text, body_text[:400])
         check("round history shows both rounds with a result pill", "#1" in body_text and "#2" in body_text)
         boards_btns = page.locator("#team-detail-body button", has_text="Boards")
         if boards_btns.count() > 0:

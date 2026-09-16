@@ -19,6 +19,7 @@ from chessolympiad.simulate.real_standings import (
     real_round_history,
     real_rounds_for_replay,
 )
+from chessolympiad.simulate.round import _player_key
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "data" / "artifact_export"
 
@@ -44,11 +45,15 @@ def export_section(conn, tournament_id: str) -> dict:
             {"board": r["board_no"], "name": r["name"], "title": r["title"], "rating": r["rating"], "fed": r["federation"], "fideId": r["fide_id"]}
         )
 
-    # Real (not simulated) standings/history, once at least one round has
-    # actually been played -- as_of_round stays 0 pre-event, in which case
-    # every one of these collections is empty and the fields below are
-    # simply omitted from each team/board entry.
+    # Real (not simulated) standings/history, populated per-match as soon
+    # as each one is decided (unfiltered -- NOT complete_only=True) so the
+    # live dashboard can show results well before a whole round wraps up.
+    # Everything here is keyed off `matches` directly; asOfRound (below,
+    # from the simulation_runs row) is a stricter "whole round N is fully
+    # decided" signal the forecast itself needed to safely continue
+    # synthetic rounds, and lags behind this in-progress data on purpose.
     real_rounds = load_real_rounds(conn, tournament_id)
+    live_round = max(real_rounds.keys()) if real_rounds else 0
     real_standings: dict[int, dict] = {}
     round_history: dict[int, list[dict]] = {}
     real_pstats: dict[tuple[int, int, str], dict] = {}
@@ -62,6 +67,23 @@ def export_section(conn, tournament_id: str) -> dict:
         round_history = real_round_history(conn, tournament_id, team_names)
         real_pstats = real_player_stats(snapshot_state)
 
+    # Attach each roster player's own real games/score/TPR so far -- not
+    # just the per-board top-15 medal-chance list below, which only ever
+    # shows the handful of players currently forecast to contend for that
+    # board's medal, not "my team's own players." Keyed the same way
+    # real_pstats itself is (team_no, board_no, player identity) so a
+    # reserve who subs in accrues their own record at whatever board they
+    # actually played, not the nominal roster board of whoever they
+    # replaced.
+    for team_no, roster in rosters.items():
+        for p in roster:
+            key = (team_no, p["board"], _player_key(p["fideId"], p["name"]))
+            real = real_pstats.get(key)
+            if real and real["games"] > 0:
+                p["actualGames"] = real["games"]
+                p["actualScore"] = real["score"]
+                p["actualTpr"] = real["tpr"]
+
     teams = []
     for r in conn.execute(
         """
@@ -72,6 +94,7 @@ def export_section(conn, tournament_id: str) -> dict:
         (tournament_id, run["run_id"]),
     ):
         standing = real_standings.get(r["team_no"])
+        team_round_results = round_history.get(r["team_no"], [])
         teams.append({
             "no": r["team_no"], "fed": r["federation"], "name": r["team_name"],
             "rtg": r["rating_avg"], "captain": r["captain"], "seed": r["initial_rank"],
@@ -84,7 +107,8 @@ def export_section(conn, tournament_id: str) -> dict:
             # Real results so far -- absent/None pre-event (as_of_round=0).
             "actualMp": standing["mp"] if standing else None,
             "actualRank": standing["rank"] if standing else None,
-            "roundResults": round_history.get(r["team_no"], []),
+            "actualGamePts": round(sum(rr["ownGamePts"] for rr in team_round_results), 1) if team_round_results else None,
+            "roundResults": team_round_results,
         })
 
     boards: dict[str, list[dict]] = {}
@@ -132,6 +156,11 @@ def export_section(conn, tournament_id: str) -> dict:
         "lastSynced": t["last_synced_at"],
         "generatedAt": run["created_at"],
         "asOfRound": run["as_of_round"],
+        # The round the live tables should currently show, updated as soon
+        # as any match in it is decided -- see the comment above real_rounds.
+        # asOfRound above only advances once that whole round is finished
+        # (the forecast needs that guarantee; the live display doesn't).
+        "liveRound": live_round,
         "iterations": run["iterations"],
         "teams": teams,
         "boards": boards,

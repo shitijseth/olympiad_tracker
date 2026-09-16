@@ -138,8 +138,8 @@
   .medal-pill.silver{ background:color-mix(in srgb, var(--silver) 18%, transparent); color:var(--silver); }
   .medal-pill.bronze{ background:color-mix(in srgb, var(--bronze) 18%, transparent); color:var(--bronze); }
   .empty-note{ color:var(--muted); font-size:12.5px; padding:14px 0; }
-  /* Real-results columns/panels only make sense once at least one round has actually been
-     played -- hidden by default, revealed by toggling .live on an ancestor once asOfRound>0. */
+  /* Real-results columns/panels only make sense once at least one real match has been
+     decided -- hidden by default, revealed by toggling .live on an ancestor once liveRound>0. */
   .live-col{ display:none; }
   .live .live-col{ display:table-cell; }
   .live-only{ display:none; }
@@ -159,6 +159,7 @@
   .roster-card .board-no{ font-family:"IBM Plex Mono"; font-size:10.5px; color:var(--accent-strong); font-weight:600; text-transform:uppercase; letter-spacing:.05em;}
   .roster-card .p-name{ font-weight:600; font-size:13.5px; }
   .roster-card .p-rtg{ font-family:"IBM Plex Mono"; color:var(--muted); font-size:12px; }
+  .roster-card .p-actual{ font-family:"IBM Plex Mono"; color:var(--accent-strong); font-size:11.5px; margin-top:2px; padding-top:4px; border-top:1px dashed var(--line); }
 
   .searchpick{ position:relative; }
   .searchpick .results{
@@ -302,6 +303,7 @@
               <th data-key="name">Team</th>
               <th class="num" data-key="rtg">Rating</th>
               <th class="num live-col" data-key="actualMp">MP</th>
+              <th class="num live-col" data-key="actualGamePts">GP</th>
               <th class="num live-col" data-key="actualRank">Rank</th>
               <th class="num" data-key="pGold">Gold</th>
               <th class="num" data-key="pSilver">Silver</th>
@@ -309,7 +311,7 @@
               <th class="num" data-key="pAnyMedal">Any medal</th>
               <th class="num" data-key="pTop8">Top 8</th>
             </tr></thead>
-            <tbody id="lb-tbody"><tr><td colspan="10" class="empty-note">Loading standings…</td></tr></tbody>
+            <tbody id="lb-tbody"><tr><td colspan="11" class="empty-note">Loading standings…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -477,12 +479,12 @@
     if (!d) { document.getElementById("status-text").textContent = "Waiting for forecast data…"; return; }
 
     document.getElementById("status-text").textContent = "Live · last forecast " + timeAgo(d.generatedAt);
-    document.body.classList.toggle("live", d.asOfRound > 0);
+    document.body.classList.toggle("live", d.liveRound > 0);
     const label = d.tournamentId.endsWith("women") ? "Women" : "Open";
     document.getElementById("lb-title").textContent = d.name;
     document.getElementById("lb-meta").textContent =
       `${d.numTeams} teams · ${d.iterations.toLocaleString()} Monte Carlo iterations · ` +
-      (d.asOfRound > 0 ? `real results locked through round ${d.asOfRound}/${d.numRounds}` : `pre-event forecast, round 1 of ${d.numRounds} not yet played`);
+      (d.liveRound > 0 ? `round ${d.liveRound}/${d.numRounds} in progress${roundProgressSuffix(d)}` : `pre-event forecast, round 1 of ${d.numRounds} not yet played`);
 
     renderTiles(d);
     renderChartMedals(d);
@@ -492,6 +494,12 @@
     renderStats(d);
   }
 
+  function roundProgressSuffix(d) {
+    const matches = (d.pairings || {})[d.liveRound];
+    if (!matches || !matches.length) return "";
+    const decided = matches.filter(m => m.hasResults).length;
+    return decided < matches.length ? ` (${decided}/${matches.length} matches decided)` : "";
+  }
   function renderTiles(d) {
     const top = d.teams[0];
     const wrap = document.getElementById("lb-tiles");
@@ -499,7 +507,7 @@
     const tiles = [
       ["Favorite", top ? `${top.fed}` : "—", top ? top.name : ""],
       ["Top gold chance", top ? fmtPct(top.pGold) : "—", top ? top.name : ""],
-      ["Rounds", `${d.numRounds}`, d.asOfRound > 0 ? `${d.asOfRound} played` : "not started"],
+      ["Rounds", `${d.numRounds}`, d.liveRound > 0 ? `round ${d.liveRound} in progress` : "not started"],
       ["Field size", `${d.numTeams}`, "registered teams"],
     ];
     for (const [label, value, sub] of tiles) {
@@ -582,6 +590,7 @@
         el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
         el("td", { class: "num" }, String(t.rtg ?? "—")),
         el("td", { class: "num live-col" }, t.actualMp != null ? String(t.actualMp) : "—"),
+        el("td", { class: "num live-col" }, t.actualGamePts != null ? fmtGamePts(t.actualGamePts) : "—"),
         el("td", { class: "num live-col" }, t.actualRank != null ? "#" + t.actualRank : "—"),
         el("td", { class: "num" }, fmtPct(t.pGold)),
         el("td", { class: "num" }, fmtPct(t.pSilver)),
@@ -591,7 +600,7 @@
       );
       tbody.append(tr);
     }
-    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 10, class: "empty-note" }, "No teams match your search.")));
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 11, class: "empty-note" }, "No teams match your search.")));
   }
   document.querySelectorAll("#lb-table th[data-key]").forEach(th => {
     th.addEventListener("click", () => {
@@ -650,10 +659,15 @@
   function rosterGrid(roster) {
     const g = el("div", { class: "roster-grid" });
     for (const p of (roster || []).slice().sort((a, b) => a.board - b.board)) {
-      g.append(el("div", { class: "roster-card" },
+      const card = el("div", { class: "roster-card" },
         el("div", { class: "board-no" }, p.board <= 4 ? "Board " + p.board : "Reserve"),
         el("div", { class: "p-name" }, (p.title ? p.title + " " : "") + p.name),
-        el("div", { class: "p-rtg" }, p.rating ? p.rating + " · " + p.fed : p.fed)));
+        el("div", { class: "p-rtg" }, p.rating ? p.rating + " · " + p.fed : p.fed));
+      if (p.actualGames != null) {
+        card.append(el("div", { class: "p-actual" },
+          `${fmtGamePts(p.actualScore)}/${p.actualGames} so far · TPR ${p.actualTpr}`));
+      }
+      g.append(card);
     }
     return g;
   }

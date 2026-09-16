@@ -70,13 +70,48 @@ def load_rosters(conn: sqlite3.Connection, tournament_id: str, adaptive: bool = 
     return rosters
 
 
-def load_real_rounds(conn: sqlite3.Connection, tournament_id: str) -> dict[int, RealRoundData]:
+def load_real_rounds(conn: sqlite3.Connection, tournament_id: str, complete_only: bool = False) -> dict[int, RealRoundData]:
+    """Real rounds ingested so far, from `matches` (which itself populates
+    per-match as each finishes -- see chessolympiad.data.sync._derive_matches
+    -- so a round can appear here well before every team has played it).
+
+    complete_only=True restricts to rounds where every published game has a
+    result: required whenever this feeds something that then CONTINUES
+    from this state into more (synthetic) rounds -- run_monte_carlo's
+    remaining-rounds forecast and as_of_round itself, both in report.py --
+    since a team missing from a partial round would silently get skipped
+    this round and mis-paired once synthetic rounds resume. The live
+    dashboard's actual-standings display (export_artifact_data.py) wants
+    the opposite: whatever's decided right now, per-match, with no such
+    continuation concern.
+
+    Checked against `games`, not team coverage in `matches`: real events
+    have withdrawn/no-show teams that never get a pairing again for the
+    rest of the tournament, so requiring every ORIGINALLY-registered team
+    to appear every round would make complete_only permanently false the
+    moment that happens. A round with every currently-published game
+    decided is exactly as "done" as chess-results.com considers it,
+    regardless of who withdrew.
+    """
     rounds = [
         r["round"]
         for r in conn.execute(
             "SELECT DISTINCT round FROM matches WHERE tournament_id = ? ORDER BY round", (tournament_id,)
         ).fetchall()
     ]
+    if complete_only and rounds:
+        rounds = [
+            r["round"]
+            for r in conn.execute(
+                """
+                SELECT round FROM games WHERE tournament_id = ? AND round IN ({})
+                GROUP BY round
+                HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) = 0
+                ORDER BY round
+                """.format(", ".join("?" * len(rounds))),
+                (tournament_id, *rounds),
+            ).fetchall()
+        ]
     out: dict[int, RealRoundData] = {}
     for rd in rounds:
         matches = [

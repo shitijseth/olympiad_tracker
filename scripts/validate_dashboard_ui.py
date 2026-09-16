@@ -25,6 +25,7 @@ Usage:
 """
 
 import http.server
+import json
 import shutil
 import sys
 import tempfile
@@ -144,8 +145,17 @@ def run_checks(base_url: str):
         check("leaderboard title loads (Open)", "Open" in title, title)
         status_text = page.locator("#status-text").inner_text()
         check("status text shows live forecast", "Live" in status_text, status_text)
-        check("body does NOT get the 'live' class pre-event (asOfRound=0)",
-              not page.evaluate("document.body.classList.contains('live')"))
+        # Self-consistency, not a hardcoded pre-event assumption: the real
+        # 2026 event is under way by the time this runs, so whether the
+        # 'live' class is present should just match whatever the current
+        # export's liveRound field says -- 0 pre-event/between rounds,
+        # >0 once any match this round is decided.
+        open_export = json.loads((EXPORT_DIR / "2026-open.json").read_text())
+        live_round = open_export.get("liveRound", 0)
+        has_live_class = page.evaluate("document.body.classList.contains('live')")
+        check("'live' class presence matches the current export's liveRound",
+              has_live_class == (live_round > 0),
+              f"liveRound={live_round}, has_live_class={has_live_class}")
         rows = page.locator("#lb-table tbody tr")
         check("leaderboard table has ~208 team rows", rows.count() >= 200, f"got {rows.count()}")
         first_team = rows.nth(0).inner_text()

@@ -130,6 +130,20 @@ def real_rounds_for_replay(conn: sqlite3.Connection, tournament_id: str) -> dict
     synthetic Swiss-pairing algorithm, so the Simulate tab must ingest them
     verbatim (mirroring apply_real_round) before it starts generating
     rounds asOfRound+1 onward itself. Keyed by round number.
+
+    Unlike `matches` itself (which populates per-match as each finishes, so
+    the live leaderboard/board medals can show results as they land), the
+    Simulate tab needs a WHOLE round before replaying it: pairing-history
+    bookkeeping (no-rematch, colour balance, byes) has to advance every
+    team together, or the handful of teams still mid-match would silently
+    get skipped this round and re-paired incorrectly once synthetic
+    rounds resume. So a round is only included here once every published
+    game in it has a result (checked against `games`, not team coverage in
+    `matches` -- a withdrawn/no-show team never gets a pairing again for
+    the rest of the tournament, so requiring every originally-registered
+    team to appear every round would make this permanently empty once
+    that happens). real_standings and the live tables read `matches`
+    directly and are unaffected by any of this.
     """
     rounds = [
         r["round"]
@@ -137,6 +151,19 @@ def real_rounds_for_replay(conn: sqlite3.Connection, tournament_id: str) -> dict
             "SELECT DISTINCT round FROM matches WHERE tournament_id = ? ORDER BY round", (tournament_id,)
         ).fetchall()
     ]
+    if rounds:
+        rounds = [
+            r["round"]
+            for r in conn.execute(
+                """
+                SELECT round FROM games WHERE tournament_id = ? AND round IN ({})
+                GROUP BY round
+                HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) = 0
+                ORDER BY round
+                """.format(", ".join("?" * len(rounds))),
+                (tournament_id, *rounds),
+            ).fetchall()
+        ]
     out: dict[int, list[dict]] = {}
     for rd in rounds:
         matches = conn.execute(
@@ -184,11 +211,12 @@ def real_pairings(conn: sqlite3.Connection, tournament_id: str) -> dict[int, lis
     whom" as soon as that's out, board results filling in as they land.
 
     Deliberately NOT sourced from `matches`/real_rounds_for_replay: that
-    table only ever gets a row once at least one board in the match has
-    reported a result (see _derive_matches), which is exactly what keeps a
-    pairings-only round from being mistaken for a played one everywhere
-    else (asOfRound, the Simulate tab's replay, real standings). This
-    function is for display only and must never feed those.
+    table only ever gets a row for a pairing once every board in THAT
+    match has reported a result (see _derive_matches), which is exactly
+    what keeps a pairings-only match from being mistaken for a played one
+    everywhere else (asOfRound, the Simulate tab's replay, real
+    standings). This function is for display only and must never feed
+    those.
     """
     rounds = [
         r["round"]
