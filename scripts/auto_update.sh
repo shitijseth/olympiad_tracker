@@ -17,8 +17,23 @@ touch "$LOCK"
 PY=.venv/bin/python
 echo "=== $(date -u +%FT%TZ) starting auto-update ==="
 
+# Rosters rarely change mid-event (only rare substitutions), but fetching
+# all ~200 of them per section is ~98% of this script's chess-results.com
+# request volume. Only do it once a day (persisted across runs here, since
+# a cron process starts fresh each tick) -- results/pairings are still
+# re-synced on every run regardless.
+ROSTER_STATE=data/.last_roster_refresh
+REFRESH_FLAG=""
+now_epoch=$(date -u +%s)
+last_epoch=0
+[ -f "$ROSTER_STATE" ] && last_epoch=$(cat "$ROSTER_STATE")
+if [ $((now_epoch - last_epoch)) -ge 79200 ]; then # ~22h, drifts earlier each day rather than later
+  REFRESH_FLAG="--refresh-rosters"
+  echo "$now_epoch" > "$ROSTER_STATE"
+fi
+
 for section in open women; do
-  $PY -m chessolympiad.cli live-update "$section" --iterations 5000 || echo "WARN: live-update $section failed, continuing"
+  $PY -m chessolympiad.cli live-update "$section" --iterations 5000 $REFRESH_FLAG || echo "WARN: live-update $section failed, continuing"
 done
 
 if ! $PY -m chessolympiad.report.export_artifact_data; then

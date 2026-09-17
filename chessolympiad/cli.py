@@ -95,10 +95,18 @@ def simulate(section: str, iterations: int = 3000):
 
 
 @app.command()
-def live_update(section: str, iterations: int = 3000):
-    """Re-sync real results (idempotent) then re-simulate the remaining rounds."""
+def live_update(section: str, iterations: int = 3000, refresh_rosters: bool = False):
+    """Re-sync real results (idempotent) then re-simulate the remaining rounds.
+
+    refresh_rosters defaults to False: team rosters rarely change once the
+    event starts (only rare mid-event substitutions), so re-fetching all
+    ~200 of them on every call -- as every recurring/cron run otherwise
+    would -- burns almost the entire chess-results.com daily request quota
+    for no benefit. Pass --refresh-rosters explicitly (or let the daily
+    cron cadence do it) when a substitution is suspected.
+    """
     tid, tnr = TOURNAMENTS[section]
-    result = sync_tournament(tid, tnr, section, 2026, progress=typer.echo, fetch_rosters=True)
+    result = sync_tournament(tid, tnr, section, 2026, progress=typer.echo, fetch_rosters=refresh_rosters)
     typer.echo(f"synced: {result}")
     from chessolympiad.report.report import simulate_and_store, write_reports
 

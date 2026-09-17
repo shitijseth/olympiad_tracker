@@ -47,10 +47,29 @@ _RESULT_TOKENS = {
 }
 
 
+class RateLimited(RuntimeError):
+    """chess-results.com blocked this IP for exceeding its daily request cap.
+
+    This is a manual, admin-issued block (per the site's own error page),
+    not a rolling window -- it will not clear on its own. Unblocking
+    requires emailing h.herzog@swiss-manager.at.
+    """
+
+
 def _get(tnr: int, params: dict) -> requests.Response:
     p = {"lan": 1, **params}
     resp = _session.get(BASE.format(tnr=tnr), params=p, timeout=TIMEOUT)
     resp.raise_for_status()
+    # An expected .xlsx/binary export starts with "PK" (zip magic bytes);
+    # if we got HTML back instead, chess-results.com served its own error
+    # page (most notably the per-IP daily-limit block) instead of data.
+    if params.get("excel") and not resp.content.startswith(b"PK"):
+        if b"exceeded" in resp.content[:4000].lower() or b"daily limit" in resp.content[:4000].lower():
+            raise RateLimited(
+                "chess-results.com has rate-limited this IP (daily request cap exceeded). "
+                "Email h.herzog@swiss-manager.at to request unblocking."
+            )
+        raise RuntimeError("chess-results.com returned an unexpected (non-Excel) response")
     time.sleep(REQUEST_DELAY_SECONDS)
     return resp
 
