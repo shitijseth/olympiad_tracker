@@ -133,3 +133,39 @@ def load_real_rounds(conn: sqlite3.Connection, tournament_id: str, complete_only
 def get_num_rounds(conn: sqlite3.Connection, tournament_id: str) -> int:
     row = conn.execute("SELECT num_rounds FROM tournaments WHERE tournament_id = ?", (tournament_id,)).fetchone()
     return row["num_rounds"] if row else 11
+
+
+def load_boundary_round(conn: sqlite3.Connection, tournament_id: str) -> tuple[int, list[dict]] | None:
+    """The one round currently "in progress" -- published (pairings exist
+    in `games`) but not yet wholly decided -- so its already-known board
+    results can be locked in as fixed rather than re-rolled by the Monte
+    Carlo model, with only the boards still unplayed actually simulated.
+
+    Returns (round_number, game_rows) for the lowest-numbered round with
+    any published games that ISN'T complete, or None if every published
+    round is already complete (nothing in progress) or nothing has been
+    published at all yet (pre-event). A tournament only ever has at most
+    one such round at a time in practice (chess-results doesn't publish
+    round N+1 pairings before round N is essentially done), but this
+    picks the lowest if more than one ever qualifies, to stay adjacent to
+    whatever's already been ingested as complete.
+    """
+    rows = conn.execute(
+        """
+        SELECT round FROM games WHERE tournament_id = ?
+        GROUP BY round
+        HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) > 0
+        ORDER BY round
+        """,
+        (tournament_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    rd = rows[0]["round"]
+    games = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM games WHERE tournament_id = ? AND round = ?", (tournament_id, rd)
+        ).fetchall()
+    ]
+    return rd, games

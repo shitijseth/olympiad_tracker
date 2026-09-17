@@ -132,6 +132,23 @@ def build_payload():
              for m in matches]
         for rd, matches in real_rounds.items()
     }
+    # Round 3: the boundary round -- published (real pairings exist) but not
+    # in real_rounds, so not yet complete. Board 1 of each match is already
+    # decided; the rest are still open, exercising the Simulate tab's
+    # "bring up to date with live results" path (startBoundaryRound).
+    pairings["3"] = [
+        {"teamA": 1, "teamB": 4, "hasResults": False, "teamAGamePts": None, "teamBGamePts": None, "teamAWhiteOdd": True,
+         "boards": [
+             {"boardNo": 1, "whiteTeam": 1, "whiteName": "Alpha P1", "whiteRating": 2580, "blackName": "Delta P1", "blackRating": 2540, "result": "1-0"},
+             {"boardNo": 2, "whiteTeam": 4, "whiteName": "Delta P2", "whiteRating": 2520, "blackName": "Alpha P2", "blackRating": 2560, "result": None},
+             {"boardNo": 3, "whiteTeam": 1, "whiteName": "Alpha P3", "whiteRating": 2540, "blackName": "Delta P3", "blackRating": 2500, "result": None},
+             {"boardNo": 4, "whiteTeam": 4, "whiteName": "Delta P4", "whiteRating": 2480, "blackName": "Alpha P4", "blackRating": 2520, "result": None},
+         ]},
+        {"teamA": 2, "teamB": 3, "hasResults": False, "teamAGamePts": None, "teamBGamePts": None, "teamAWhiteOdd": True,
+         "boards": [{"boardNo": b, "whiteTeam": 2 if b % 2 == 1 else 3,
+                     "whiteName": f"W{b}", "whiteRating": 2560, "blackName": f"B{b}", "blackRating": 2540,
+                     "result": None} for b in range(1, 5)]},
+    ]
 
     return {
         "tournamentId": "2026-open", "name": "Live Test Open", "numRounds": 11, "numTeams": 4,
@@ -248,6 +265,30 @@ def run_checks(base_url: str):
         sim_text = page.locator("#sim-body").inner_text()
         check("Simulate tab starts at round asOfRound+1 (round 3)", "Round 3 / 11" in sim_text, sim_text[:150])
         check("Simulate tab shows the real-rounds-seeded banner", "already played" in sim_text, sim_text[:300])
+
+        # Round 3 is the boundary round: published real pairings, board 1
+        # of each match already decided, boards 2-4 still open -- verifies
+        # startBoundaryRound wired the real players/known result in and
+        # sampled the rest, instead of falling back to a synthetic pairing.
+        check("Simulate tab shows the live-round banner", "is live" in sim_text and "locked in" in sim_text, sim_text[:400])
+        boards_btn = page.locator("#sim-body button", has_text="Boards").first
+        boards_btn.click()
+        page.wait_for_timeout(150)
+        expanded_text = page.locator("#sim-body").inner_text()
+        check("boundary round shows the real player names from the published pairing", "Alpha P1" in expanded_text and "Delta P1" in expanded_text, expanded_text[:400])
+        board1_select = page.locator("#sim-body .board-row", has_text="Bd 1").first.locator("select")
+        check("boundary round's already-decided board 1 is locked to its real result", board1_select.input_value() == "1-0", board1_select.input_value())
+        open_selects = page.locator("#sim-body .board-row select")
+        check("boundary round's still-open boards got a sampled (non-empty) result",
+              all(open_selects.nth(i).input_value() in ("1-0", "0-1", "1/2-1/2") for i in range(open_selects.count())))
+
+        confirm_btn = page.locator("#sim-body button", has_text="Confirm round")
+        if confirm_btn.count() > 0:
+            before = page.locator("#sim-body").inner_text()
+            confirm_btn.first.click()
+            page.wait_for_function("(text) => document.getElementById('sim-body').innerText !== text", arg=before, timeout=8000)
+            after_text = page.locator("#sim-body").inner_text()
+            check("confirming the boundary round advances to round 4", "Round 4 / 11" in after_text, after_text[:150])
 
         check("no uncaught JS console errors", len(console_errors) == 0, "; ".join(console_errors[:5]))
         browser.close()

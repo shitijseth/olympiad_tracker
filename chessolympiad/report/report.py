@@ -9,7 +9,7 @@ import datetime as dt
 from pathlib import Path
 
 from chessolympiad.data import db
-from chessolympiad.simulate.loader import get_num_rounds, load_real_rounds, load_rosters, load_teams
+from chessolympiad.simulate.loader import get_num_rounds, load_boundary_round, load_real_rounds, load_rosters, load_teams
 from chessolympiad.simulate.tournament import run_monte_carlo
 
 REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
@@ -32,8 +32,17 @@ def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None)
         real_rounds = load_real_rounds(conn, tournament_id, complete_only=True)
         as_of_round = max(real_rounds.keys()) if real_rounds else 0
 
+        # The round currently in progress (published, not yet wholly
+        # decided): its already-known board results get locked in as fixed
+        # too, same as a completed round, so only the boards still
+        # unplayed actually carry Monte Carlo uncertainty -- not the whole
+        # round. Doesn't affect as_of_round (which stays "whole rounds
+        # complete" for the reasons above); this is an independent input.
+        boundary_round = load_boundary_round(conn, tournament_id)
+
         team_forecasts, player_forecasts = run_monte_carlo(
-            teams, rosters, num_rounds, iterations, real_rounds=real_rounds, progress=progress
+            teams, rosters, num_rounds, iterations,
+            real_rounds=real_rounds, boundary_round=boundary_round, progress=progress,
         )
 
         cur = conn.execute(

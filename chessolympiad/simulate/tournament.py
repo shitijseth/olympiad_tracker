@@ -14,7 +14,7 @@ import random
 from dataclasses import dataclass, field
 
 from chessolympiad.pairing.swiss_team import TeamPairingState, make_pairings
-from chessolympiad.simulate.round import TournamentState, apply_pairings, apply_real_round
+from chessolympiad.simulate.round import TournamentState, apply_boundary_round, apply_pairings, apply_real_round
 from chessolympiad.simulate.tiebreak import compute_tiebreaks, rank_teams
 
 
@@ -89,6 +89,7 @@ def run_monte_carlo(
     num_rounds: int,
     iterations: int,
     real_rounds: dict[int, RealRoundData] | None = None,
+    boundary_round: tuple[int, list[dict]] | None = None,
     seed: int | None = None,
     progress=None,
 ) -> tuple[dict[int, TeamForecast], dict[tuple[int, int, str], PlayerForecast]]:
@@ -123,6 +124,8 @@ def run_monte_carlo(
             remaining_after = num_rounds - rd
             if rd in real_rounds:
                 apply_real_round(state, real_rounds[rd].matches, real_rounds[rd].games, remaining_after)
+            elif boundary_round is not None and rd == boundary_round[0]:
+                apply_boundary_round(state, boundary_round[1], remaining_after, rng)
             else:
                 pairings = make_pairings(list(pairing_states.values()))
                 apply_pairings(state, pairings, rng, remaining_after)

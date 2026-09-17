@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from chessolympiad.model import constants as C
+from chessolympiad.model import elo
 from chessolympiad.model.lineup import choose_lineup
 from chessolympiad.pairing.swiss_team import Pairing, TeamPairingState
 from chessolympiad.simulate.match import match_points_from_game_points, simulate_match
@@ -153,6 +155,66 @@ def apply_real_round(
             _record_player_result(state, white_team, white_board, g["white_fide_id"], g["white_name"], white_score, g["black_rating"] or 0)
         if black_board:
             _record_player_result(state, black_team, black_board, g["black_fide_id"], g["black_name"], black_score, g["white_rating"] or 0)
+
+
+def apply_boundary_round(
+    state: TournamentState,
+    games: list[dict],
+    remaining_rounds_after: int,
+    rng,
+) -> None:
+    """The one round currently in progress: some boards already have a
+    real result, others don't yet. Known boards are locked in exactly as
+    played; each still-open board is sampled once per Monte Carlo
+    iteration with the same outcome model synthetic rounds use (Davidson,
+    plus a shared per-match "team day" shock across that match's *still
+    open* boards only -- already-decided boards keep their real result
+    untouched). Match points/history/pairing-state bookkeeping then update
+    exactly as apply_real_round's would once every board in a pairing is
+    accounted for, real or sampled.
+    """
+    by_pair: dict[tuple[int, int], list[dict]] = {}
+    for g in games:
+        by_pair.setdefault((g["team_a_no"], g["team_b_no"]), []).append(g)
+
+    for (a, b), pair_games in by_pair.items():
+        if a not in state.match_points or b not in state.match_points:
+            continue
+        cmp_a_before, cmp_b_before = state.match_points[a], state.match_points[b]
+        shock_a, shock_b = rng.gauss(0, C.TEAM_DAY_SHOCK_SD), rng.gauss(0, C.TEAM_DAY_SHOCK_SD)
+        a_pts = b_pts = 0.0
+
+        for g in pair_games:
+            white_team = g["white_team_no"]
+            black_team = b if white_team == a else a
+            result = g["result"]
+            if result not in ("1-0", "0-1", "1/2-1/2"):
+                white_shock = shock_a if white_team == a else shock_b
+                black_shock = shock_b if white_team == a else shock_a
+                result = elo.sample_result(g["white_rating"] + white_shock, g["black_rating"] + black_shock, rng)
+            white_score, black_score = {"1-0": (1.0, 0.0), "0-1": (0.0, 1.0), "1/2-1/2": (0.5, 0.5)}[result]
+            if white_team == a:
+                a_pts += white_score
+                b_pts += black_score
+            else:
+                a_pts += black_score
+                b_pts += white_score
+            white_board = _board_no_for(state, white_team, g["white_fide_id"], g["white_name"])
+            black_board = _board_no_for(state, black_team, g["black_fide_id"], g["black_name"])
+            if white_board:
+                _record_player_result(state, white_team, white_board, g["white_fide_id"], g["white_name"], white_score, g["black_rating"] or 0)
+            if black_board:
+                _record_player_result(state, black_team, black_board, g["black_fide_id"], g["black_name"], black_score, g["white_rating"] or 0)
+
+        a_mp, b_mp = match_points_from_game_points(a_pts, b_pts)
+        state.match_points[a] += a_mp
+        state.match_points[b] += b_mp
+        state.pairing_states[a].match_points = state.match_points[a]
+        state.pairing_states[b].match_points = state.match_points[b]
+        state.history[a].append(RoundRecord(opponent_no=b, game_points=a_pts, cmp_before=cmp_a_before, remaining_rounds_after=remaining_rounds_after))
+        state.history[b].append(RoundRecord(opponent_no=a, game_points=b_pts, cmp_before=cmp_b_before, remaining_rounds_after=remaining_rounds_after))
+        state.pairing_states[a].opponents.add(b)
+        state.pairing_states[b].opponents.add(a)
 
 
 def _board_no_for(state: TournamentState, team_no: int, fide_id: int | None, name: str) -> int | None:

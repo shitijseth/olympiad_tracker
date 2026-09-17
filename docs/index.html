@@ -300,12 +300,12 @@
         <div class="table-wrap">
           <table id="lb-table">
             <thead><tr>
-              <th data-key="rank">#</th>
+              <th class="num" data-key="seed">Seed</th>
               <th data-key="name">Team</th>
               <th class="num" data-key="rtg">Rating</th>
               <th class="num live-col" data-key="actualMp">MP</th>
               <th class="num live-col" data-key="actualGamePts">GP</th>
-              <th class="num live-col" data-key="actualRank">Rank</th>
+              <th class="num live-col" data-key="actualRank">Current rank</th>
               <th class="num" data-key="pGold">Gold</th>
               <th class="num" data-key="pSilver">Silver</th>
               <th class="num" data-key="pBronze">Bronze</th>
@@ -587,7 +587,7 @@
       const tr = el("tr", {});
       tr.addEventListener("click", () => selectTeam(t.no));
       tr.append(
-        el("td", { class: "rank-cell" }, "#" + t.rank),
+        el("td", { class: "num rank-cell" }, "#" + t.seed),
         el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
         el("td", { class: "num" }, String(t.rtg ?? "—")),
         el("td", { class: "num live-col" }, t.actualMp != null ? String(t.actualMp) : "—"),
@@ -1198,6 +1198,20 @@
       applyRealRoundToSim(real[String(rd)]);
     }
     Sim.seededThroughRound = Sim.round;
+
+    // The one round currently in progress: pairings are already published
+    // (chess-results.com posts them before any game finishes) even though
+    // not every board has a result yet. Bring the simulation up to date
+    // with whatever's actually known there too -- real pairings, real
+    // boards locked in, only the still-open ones sampled -- instead of
+    // discarding all of that for a synthetic pairing that can't reproduce
+    // it anyway. Only ever the round right after whatever's fully seeded.
+    const pairings = d.pairings || {};
+    const boundaryRd = Sim.seededThroughRound + 1;
+    const boundaryMatches = pairings[boundaryRd];
+    Sim.boundaryRound = (boundaryMatches && boundaryMatches.length) ? boundaryRd : null;
+    Sim.boundaryMatches = Sim.boundaryRound ? boundaryMatches : null;
+
     startRound();
   }
 
@@ -1234,6 +1248,10 @@
 
   function startRound() {
     Sim.round += 1;
+    if (Sim.round === Sim.boundaryRound) {
+      startBoundaryRound(Sim.boundaryMatches);
+      return;
+    }
     Sim.pairings = makePairings(Sim.teams);
     Sim.results = new Map();
     Sim.pairings.forEach((p, idx) => {
@@ -1249,12 +1267,46 @@
     renderSim();
   }
 
+  function startBoundaryRound(matches) {
+    // The live round: real pairings, real boards locked in verbatim,
+    // still-open boards sampled with the same model + shared per-match
+    // "team day" shock synthetic rounds use (see simulateMatch) so this
+    // round's variance behaves consistently with every other one.
+    Sim.pairings = matches.map(m => ({ teamA: m.teamA, teamB: m.teamB, teamAWhiteOdd: m.teamAWhiteOdd }));
+    Sim.results = new Map();
+    matches.forEach((m, idx) => {
+      if (m.teamB == null) { Sim.results.set(idx, { bye: true }); return; }
+      const shockA = gaussian(Sim.rng) * MC.TEAM_DAY_SHOCK_SD, shockB = gaussian(Sim.rng) * MC.TEAM_DAY_SHOCK_SD;
+      let aPts = 0, bPts = 0;
+      const boards = (m.boards || []).map(b => {
+        const whiteIsA = b.whiteTeam === m.teamA;
+        const white = { name: b.whiteName, rating: b.whiteRating };
+        const black = { name: b.blackName, rating: b.blackRating };
+        let result = b.result;
+        if (result !== "1-0" && result !== "0-1" && result !== "1/2-1/2") {
+          const whiteShock = whiteIsA ? shockA : shockB, blackShock = whiteIsA ? shockB : shockA;
+          result = sampleResult(white.rating + whiteShock, black.rating + blackShock, Sim.rng);
+        }
+        const [wS, bS] = scoreFor(result);
+        if (whiteIsA) { aPts += wS; bPts += bS; } else { aPts += bS; bPts += wS; }
+        return { boardNo: b.boardNo, whiteIsA, white, black, result };
+      });
+      Sim.results.set(idx, { aPts, bPts, boards, overridden: false });
+    });
+    renderSim();
+  }
+
   function overrideMatch(idx, outcome) {
     const p = Sim.pairings[idx];
-    const teamA = Sim.byNo.get(p.teamA), teamB = Sim.byNo.get(p.teamB);
-    const rosterA = Sim.rosters.get(p.teamA) || [], rosterB = Sim.rosters.get(p.teamB) || [];
-    const lineupA = chooseLineup(rosterA, teamA.rtg, teamB.rtg, Sim.rng);
-    const lineupB = chooseLineup(rosterB, teamB.rtg, teamA.rtg, Sim.rng);
+    // Reuse the lineup already on screen (real players for the boundary
+    // round, or whatever chooseLineup already rolled for a synthetic one)
+    // rather than re-deriving it -- chooseLineup's reserve-substitution
+    // roll is itself randomized, so calling it again here could silently
+    // swap in a different player than the one the user is looking at.
+    const existing = Sim.results.get(idx);
+    const sortedBoards = existing.boards.slice().sort((x, y) => x.boardNo - y.boardNo);
+    const lineupA = sortedBoards.map(b => b.whiteIsA ? b.white : b.black);
+    const lineupB = sortedBoards.map(b => b.whiteIsA ? b.black : b.white);
     let attempt, cls;
     for (let tries = 0; tries < 25; tries++) {
       attempt = simulateMatch(lineupA, lineupB, p.teamAWhiteOdd, Sim.rng);
@@ -1453,6 +1505,12 @@
     if (Sim.seededThroughRound > 0) {
       body.append(el("p", { class: "empty-note" },
         `Rounds 1–${Sim.seededThroughRound} are the real results already played; simulating from round ${Sim.seededThroughRound + 1} onward.`));
+    }
+    if (Sim.round === Sim.boundaryRound) {
+      const decided = (Sim.boundaryMatches || []).reduce((n, m) => n + (m.boards || []).filter(b => b.result === "1-0" || b.result === "0-1" || b.result === "1/2-1/2").length, 0);
+      const total = (Sim.boundaryMatches || []).reduce((n, m) => n + (m.boards || []).length, 0);
+      body.append(el("p", { class: "empty-note" },
+        `Round ${Sim.round} is live: using the real published pairings, ${decided}/${total} boards already decided are locked in as shown, and the rest are simulated below -- override any of them before confirming.`));
     }
 
     if (!finished) Sim.pairings.forEach((p, idx) => body.append(renderMatchCard(p, idx)));
