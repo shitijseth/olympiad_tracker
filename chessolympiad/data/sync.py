@@ -79,6 +79,27 @@ def sync_tournament(
         team_rows = [{**t, "tournament_id": tournament_id} for t in meta.teams]
         db.upsert(conn, "teams", team_rows, key_cols=["tournament_id", "team_no"])
 
+        # chess-results.com's team_no is a starting-rank *position*: a
+        # mid-event withdrawal shifts every later team's number down by one,
+        # so a team_no that no longer appears in the current fetch isn't
+        # just "gone" -- it may now belong to a different team entirely (the
+        # one that shifted into it), and its old roster is stale regardless.
+        # Garbage-collect it rather than let an upsert-only sync accumulate
+        # a phantom extra team forever (this is what was inflating numTeams
+        # and, more seriously, letting one real team's round results get
+        # recorded under two different team_no values across a renumbering).
+        current_nos = [t["team_no"] for t in meta.teams]
+        if current_nos:
+            placeholders = ", ".join("?" * len(current_nos))
+            conn.execute(
+                f"DELETE FROM teams WHERE tournament_id = ? AND team_no NOT IN ({placeholders})",
+                [tournament_id, *current_nos],
+            )
+            conn.execute(
+                f"DELETE FROM players WHERE tournament_id = ? AND team_no NOT IN ({placeholders})",
+                [tournament_id, *current_nos],
+            )
+
         name_to_fide: dict[tuple[str, int, str], int] = {}
         if fetch_rosters:
             if progress:
@@ -113,6 +134,18 @@ def sync_tournament(
                 )
                 row["forfeit"] = int(row["forfeit"])
                 game_rows.append(row)
+            # Delete-then-insert, not upsert-and-accumulate: chess-results.com's
+            # team_no is a starting-rank *position*, not a permanent ID -- a
+            # mid-event withdrawal shifts every later team's number down by
+            # one. Upserting by (round, team_a_no, team_b_no, board_no) would
+            # then leave the pre-shift rows sitting alongside the post-shift
+            # ones forever (same real match, two different team_no pairs),
+            # which is exactly what showed up as one team appearing twice in
+            # a single round's pairings. A full re-fetch of this round is
+            # already happening every sync regardless, so replacing its
+            # rows outright is always safe and never loses data.
+            conn.execute("DELETE FROM games WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
+            conn.execute("DELETE FROM matches WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
             db.upsert(
                 conn,
                 "games",
