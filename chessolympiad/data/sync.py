@@ -33,6 +33,23 @@ class SyncResult:
     total_games: int
 
 
+def _complete_rounds(conn, tournament_id: str) -> set[int]:
+    """Rounds already in `games` where every board has a result. These
+    can't change (short of a rare post-hoc arbiter correction, caught by
+    the periodic `refetch_complete_rounds=True` pass instead) so a live
+    sync doesn't need to re-fetch them every cycle -- without this, a
+    recurring job's per-cycle request count grows by one round's worth of
+    requests every time a new round finishes, eventually exceeding
+    chess-results.com's daily cap on its own even with rosters excluded.
+    """
+    cur = conn.execute(
+        "SELECT round FROM games WHERE tournament_id = ? "
+        "GROUP BY round HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) = 0",
+        (tournament_id,),
+    )
+    return {row["round"] for row in cur.fetchall()}
+
+
 def sync_tournament(
     tournament_id: str,
     tnr: int,
@@ -41,6 +58,7 @@ def sync_tournament(
     max_round_probe: int | None = None,
     progress=None,
     fetch_rosters: bool = True,
+    refetch_complete_rounds: bool = True,
 ) -> SyncResult:
     """Full resync: tournament metadata, teams, rosters, and every round of
     board-level results that currently has data.
@@ -54,6 +72,12 @@ def sync_tournament(
     fetch_rosters: skip roster ingestion for historical events used only
     for calibration (game-level ratings already come from `games`), to
     avoid hundreds of extra requests per tournament.
+
+    refetch_complete_rounds: when False, rounds already fully decided in
+    our own DB are left as-is instead of being re-fetched -- only rounds
+    still in progress (or not yet seen) hit chess-results.com. Pass False
+    for frequent/recurring syncs and True for an occasional full refresh
+    (a live tournament round can rarely get a post-hoc correction).
     """
     conn = db.connect()
     try:
@@ -100,7 +124,6 @@ def sync_tournament(
                 [tournament_id, *current_nos],
             )
 
-        name_to_fide: dict[tuple[str, int, str], int] = {}
         if fetch_rosters:
             if progress:
                 progress(f"{tournament_id}: {len(team_rows)} teams synced, fetching rosters...")
@@ -110,15 +133,27 @@ def sync_tournament(
                 for p in roster:
                     player_rows.append({**p, "tournament_id": tournament_id, "team_no": t["team_no"]})
             db.upsert(conn, "players", player_rows, key_cols=["tournament_id", "team_no", "board_no"])
-            for p in player_rows:
-                if p.get("fide_id"):
-                    key = (tournament_id, p["team_no"], _normalize_name(p["name"]))
-                    name_to_fide[key] = p["fide_id"]
 
+        # Sourced from the `players` table (not just rosters fetched in
+        # *this* call) so that white/black_fide_id linkage still works on a
+        # recurring sync that skips re-fetching rosters -- the mapping from
+        # an earlier call's roster fetch is already sitting in the DB.
+        name_to_fide: dict[tuple[str, int, str], int] = {}
+        for row in conn.execute(
+            "SELECT team_no, name, fide_id FROM players WHERE tournament_id = ? AND fide_id IS NOT NULL",
+            (tournament_id,),
+        ).fetchall():
+            key = (tournament_id, row["team_no"], _normalize_name(row["name"]))
+            name_to_fide[key] = row["fide_id"]
+
+        complete_rounds = set() if refetch_complete_rounds else _complete_rounds(conn, tournament_id)
         rounds_to_try = range(1, (max_round_probe or meta.num_rounds) + 1)
         rounds_synced = []
         total_games = 0
         for rd in rounds_to_try:
+            if rd in complete_rounds:
+                rounds_synced.append(rd)  # already fully decided locally, no need to re-fetch
+                continue
             games = cr.fetch_round_board_results(tnr, rd)
             if not games:
                 break  # this round hasn't been played/published yet

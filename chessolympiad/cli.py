@@ -95,18 +95,29 @@ def simulate(section: str, iterations: int = 3000):
 
 
 @app.command()
-def live_update(section: str, iterations: int = 3000, refresh_rosters: bool = False):
+def live_update(section: str, iterations: int = 3000, full_refresh: bool = False):
     """Re-sync real results (idempotent) then re-simulate the remaining rounds.
 
-    refresh_rosters defaults to False: team rosters rarely change once the
-    event starts (only rare mid-event substitutions), so re-fetching all
-    ~200 of them on every call -- as every recurring/cron run otherwise
-    would -- burns almost the entire chess-results.com daily request quota
-    for no benefit. Pass --refresh-rosters explicitly (or let the daily
-    cron cadence do it) when a substitution is suspected.
+    full_refresh defaults to False, which skips two things that are almost
+    entirely wasted work on a frequent/recurring call but which together
+    were ~100% of this command's chess-results.com request volume: (1)
+    re-fetching every team's roster (rosters rarely change once the event
+    starts -- only rare mid-event substitutions) and (2) re-fetching rounds
+    already recorded locally as fully decided (a completed round's result
+    can't change short of a rare post-hoc correction). Only the still-live
+    round(s) get fetched. Pass --full-refresh explicitly (or let the daily
+    cron cadence do it) to re-verify everything against the live site.
     """
     tid, tnr = TOURNAMENTS[section]
-    result = sync_tournament(tid, tnr, section, 2026, progress=typer.echo, fetch_rosters=refresh_rosters)
+    result = sync_tournament(
+        tid,
+        tnr,
+        section,
+        2026,
+        progress=typer.echo,
+        fetch_rosters=full_refresh,
+        refetch_complete_rounds=full_refresh,
+    )
     typer.echo(f"synced: {result}")
     from chessolympiad.report.report import simulate_and_store, write_reports
 

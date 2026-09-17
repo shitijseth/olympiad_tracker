@@ -4,7 +4,7 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 data/olympiad.db
-data/.last_roster_refresh
+data/.last_full_refresh
 logs/
 
 # Design reference material the user dropped in (hundreds of MB: a PSD +

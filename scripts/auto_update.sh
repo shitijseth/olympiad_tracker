@@ -17,19 +17,21 @@ touch "$LOCK"
 PY=.venv/bin/python
 echo "=== $(date -u +%FT%TZ) starting auto-update ==="
 
-# Rosters rarely change mid-event (only rare substitutions), but fetching
-# all ~200 of them per section is ~98% of this script's chess-results.com
-# request volume. Only do it once a day (persisted across runs here, since
-# a cron process starts fresh each tick) -- results/pairings are still
-# re-synced on every run regardless.
-ROSTER_STATE=data/.last_roster_refresh
+# Two things dominate this script's chess-results.com request volume and
+# are both almost entirely wasted work on a 10-15 min cadence: re-fetching
+# every team's roster (rarely changes mid-event) and re-fetching rounds
+# already recorded locally as fully decided (can't change short of a rare
+# post-hoc correction). Do a full refresh only once a day (persisted here
+# since a cron process starts fresh each tick) -- the still-live round is
+# always re-synced on every run regardless.
+REFRESH_STATE=data/.last_full_refresh
 REFRESH_FLAG=""
 now_epoch=$(date -u +%s)
 last_epoch=0
-[ -f "$ROSTER_STATE" ] && last_epoch=$(cat "$ROSTER_STATE")
+[ -f "$REFRESH_STATE" ] && last_epoch=$(cat "$REFRESH_STATE")
 if [ $((now_epoch - last_epoch)) -ge 79200 ]; then # ~22h, drifts earlier each day rather than later
-  REFRESH_FLAG="--refresh-rosters"
-  echo "$now_epoch" > "$ROSTER_STATE"
+  REFRESH_FLAG="--full-refresh"
+  echo "$now_epoch" > "$REFRESH_STATE"
 fi
 
 for section in open women; do
