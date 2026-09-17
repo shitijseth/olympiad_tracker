@@ -121,6 +121,7 @@
       font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none;}
   th.num, td.num{ text-align:right; font-family:"IBM Plex Mono"; }
   th:hover{ color:var(--text); }
+  th.sort-active{ color:var(--accent-strong); }
   th .arrow{ opacity:.5; margin-left:3px; }
   td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
   tbody tr{ cursor:pointer; }
@@ -309,9 +310,8 @@
               <th class="num" data-key="pSilver">Silver</th>
               <th class="num" data-key="pBronze">Bronze</th>
               <th class="num" data-key="pAnyMedal">Any medal</th>
-              <th class="num" data-key="pTop8">Top 8</th>
             </tr></thead>
-            <tbody id="lb-tbody"><tr><td colspan="11" class="empty-note">Loading standings…</td></tr></tbody>
+            <tbody id="lb-tbody"><tr><td colspan="10" class="empty-note">Loading standings…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -572,6 +572,7 @@
   }
 
   function renderTable(d) {
+    updateSortIndicators();
     const q = (document.getElementById("lb-search").value || "").toLowerCase();
     let rows = d.teams.map((t, i) => ({ ...t, rank: i + 1 }));
     if (q) rows = rows.filter(t => t.name.toLowerCase().includes(q) || t.fed.toLowerCase().includes(q));
@@ -596,13 +597,14 @@
         el("td", { class: "num" }, fmtPct(t.pSilver)),
         el("td", { class: "num" }, fmtPct(t.pBronze)),
         el("td", { class: "num" }, fmtPct(t.pAnyMedal)),
-        el("td", { class: "num" }, fmtPct(t.pTop8)),
       );
       tbody.append(tr);
     }
-    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 11, class: "empty-note" }, "No teams match your search.")));
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 10, class: "empty-note" }, "No teams match your search.")));
   }
+  const lbHeaderLabels = new Map();
   document.querySelectorAll("#lb-table th[data-key]").forEach(th => {
+    lbHeaderLabels.set(th, th.textContent);
     th.addEventListener("click", () => {
       const k = th.dataset.key;
       state.sortDir = state.sortKey === k ? -state.sortDir : (k === "name" ? 1 : -1);
@@ -610,6 +612,13 @@
       renderTable(currentData());
     });
   });
+  function updateSortIndicators() {
+    lbHeaderLabels.forEach((label, th) => {
+      const active = th.dataset.key === state.sortKey;
+      th.textContent = label + (active ? (state.sortDir > 0 ? " ▲" : " ▼") : "");
+      th.classList.toggle("sort-active", active);
+    });
+  }
   document.getElementById("lb-search").addEventListener("input", () => renderTable(currentData()));
   document.getElementById("lb-topn").addEventListener("input", () => renderChartMedals(currentData()));
   document.getElementById("rounds-search").addEventListener("input", () => renderRounds(currentData()));
