@@ -3,6 +3,16 @@
 # window (16-27 Sep 2026): re-syncs real results from chess-results.com for
 # both 2026 sections, re-forecasts the remaining rounds, refreshes docs/
 # (the GitHub Pages source), and pushes only if something actually changed.
+#
+# One unchanging cron entry is meant to run this year-round, every day,
+# at a fixed interval (15 min recommended) -- it does NOT need per-day
+# schedule changes for the rest day (22 Sep) or round 11's earlier start
+# time. All of that is handled inside chessolympiad.data.sync itself:
+# a tick outside any round's live window (chessolympiad.data.schedule)
+# costs just the team-list check (~2 requests) and does nothing else,
+# and a tick during a round only re-fetches that one round until it's
+# complete, never re-checking anything already settled. See sync.py's
+# module docstring for the full request-volume design.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

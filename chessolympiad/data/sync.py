@@ -1,11 +1,29 @@
-"""Idempotent full-resync of one tournament's data from chess-results.com
-into the local SQLite mirror.
+"""Idempotent resync of one tournament's data from chess-results.com into
+the local SQLite mirror.
 
-Every call re-fetches current rosters and all available round results and
-upserts them -- never appends -- so the DB always mirrors whatever
-chess-results.com currently shows (rosters and even ratings can change
-right up to Round 1, and captains can substitute players between rounds
-during the event).
+A recurring/live call is deliberately *not* a blind full re-fetch -- three
+layers keep its chess-results.com request volume down to just whatever
+could plausibly have changed since the last call (see the incident this
+was built to fix: a naive full-refetch-every-cycle design got this
+project's IP rate-limited and blocked):
+
+  1. Rosters (fetch_rosters) and a re-check of already-decided rounds
+     (refetch_complete_rounds) default to off for a recurring call --
+     rosters rarely change mid-event and a fully-decided round's result
+     can't change short of a rare post-hoc correction. Both are still
+     exercised periodically via an occasional full-refresh call.
+  2. A round already recorded locally as fully decided is never
+     re-fetched at all regardless of the above flags (see
+     `_complete_rounds`) -- otherwise a recurring job's per-cycle request
+     count would grow by one round's worth of requests every time a new
+     round finished.
+  3. A round that hasn't started yet (+ a buffer) per FIDE's published
+     schedule (`chessolympiad.data.schedule`) is never even probed -- see
+     `schedule.round_polling_open`.
+
+Net effect for the live 2026 event: a routine call only hits
+chess-results.com for the team list plus whatever round is currently
+in progress, and stops touching that round the moment it's complete.
 """
 
 from __future__ import annotations
@@ -16,6 +34,7 @@ from dataclasses import dataclass
 
 from chessolympiad.data import chessresults_client as cr
 from chessolympiad.data import db
+from chessolympiad.data import schedule
 
 
 def _normalize_name(name: str) -> str:
@@ -154,6 +173,12 @@ def sync_tournament(
             if rd in complete_rounds:
                 rounds_synced.append(rd)  # already fully decided locally, no need to re-fetch
                 continue
+            if not schedule.round_polling_open(tournament_id, rd):
+                # Round hasn't started yet (+ a buffer) per FIDE's published
+                # schedule -- it can't have any results, so there's nothing
+                # to gain by asking, and every later round starts even
+                # later, so nothing past this point is due either.
+                break
             games = cr.fetch_round_board_results(tnr, rd)
             if not games:
                 break  # this round hasn't been played/published yet
