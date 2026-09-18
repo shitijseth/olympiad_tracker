@@ -101,7 +101,8 @@
   .tile .sub{ font-size:11.5px; color:var(--muted); }
   .favorites-list{ display:flex; flex-direction:column; gap:4px; }
   .favorite-row{ display:flex; justify-content:space-between; gap:10px; font-size:19px; font-weight:600; }
-  .favorite-row .favorite-pct{ color:var(--accent-strong); }
+  .favorite-row .favorite-name{ flex:1; min-width:0; }
+  .favorite-row .favorite-pct{ color:var(--accent-strong); flex-shrink:0; }
 
   .panel{
     background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
@@ -518,21 +519,28 @@
           el(
             "div",
             { class: "favorite-row" },
-            el("span", { class: "favorite-name" }, `${i + 1}. ${t.fed}`),
+            el("span", { class: "favorite-name" }, `${i + 1}. ${t.name}`),
             el("span", { class: "favorite-pct" }, fmtPct(t.pGold)),
           ),
         ),
       ),
-      el("div", { class: "sub" }, topGold.map(t => t.name).join(" · ") || "—"),
     );
     wrap.append(favoritesTile);
-    const tiles = [
-      ["Rounds", `${d.numRounds}`, d.liveRound > 0 ? `round ${d.liveRound} in progress` : "not started"],
-      ["Field size", `${d.numTeams}`, "registered teams"],
-    ];
-    for (const [label, value, sub] of tiles) {
-      wrap.append(el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)));
-    }
+
+    const roundsDone = d.liveRound;
+    let roundsSub;
+    if (d.asOfRound >= d.numRounds) roundsSub = "Tournament complete";
+    else if (roundsDone >= d.numRounds) roundsSub = `Round ${d.numRounds} in progress`;
+    else roundsSub = `Round ${roundsDone + 1} starts soon`;
+    wrap.append(
+      el(
+        "div",
+        { class: "tile" },
+        el("div", { class: "label" }, "Rounds"),
+        el("div", { class: "value" }, `${roundsDone} of ${d.numRounds} done`),
+        el("div", { class: "sub" }, roundsSub),
+      ),
+    );
   }
 
   function axisNumbers(maxVal) {
