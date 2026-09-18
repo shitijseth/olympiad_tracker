@@ -118,6 +118,18 @@ def run_checks(base_url: str):
         check("tournament logo image loaded", page.evaluate("document.querySelector('.brand-logo').naturalWidth > 0"))
         check("ChessBase India logo image loaded", page.evaluate("document.querySelector('.broadcast-logo').naturalWidth > 0"))
 
+        page.locator("#lb-table tbody tr").first.click()
+        page.wait_for_timeout(200)
+        check(
+            "team detail shows a Medal chance by round chart with all 4 series",
+            page.evaluate(
+                "document.getElementById('team-detail-body').innerHTML.includes('Medal chance by round') "
+                "&& document.querySelectorAll('#team-detail-body svg path[stroke]').length >= 4"
+            ),
+        )
+        page.click(".nav-btn[data-view='leaderboard']")
+        page.wait_for_timeout(15)
+
         def check_every_team_row_renders_roster(section_label):
             page.click(".nav-btn[data-view='leaderboard']")
             page.wait_for_timeout(200)

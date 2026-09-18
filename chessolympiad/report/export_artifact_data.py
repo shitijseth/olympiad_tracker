@@ -1,8 +1,10 @@
-"""Export forecast data for the artifact dashboard's db seed.
+"""Export forecast data for the GitHub Pages dashboard (docs/data/*.json,
+fetched as plain static files -- see ui/artifact/dashboard.html's fetch
+comment).
 
 Produces a compact-but-complete JSON payload per section: team forecasts
 (with nested rosters), per-board medal leaderboards, and aggregate field
-stats -- sized to comfortably fit the artifact db's 256 KiB/document cap.
+stats.
 """
 
 from __future__ import annotations
@@ -28,6 +30,43 @@ def _latest_run(conn, tournament_id: str) -> dict | None:
     return conn.execute(
         "SELECT * FROM simulation_runs WHERE tournament_id=? ORDER BY run_id DESC LIMIT 1", (tournament_id,)
     ).fetchone()
+
+
+def _medal_history(conn, tournament_id: str) -> dict[int, list[dict]]:
+    """Each team's medal-probability forecast at every round milestone
+    reached so far, for the Team Detail page's forecast-over-time chart.
+    One point per distinct as_of_round value, taken from the latest run
+    recorded at that milestone (many runs can share an as_of_round --
+    every recurring cycle before the next round completes, plus a lot of
+    historical manual testing at varying iteration counts -- the most
+    recent one is the best-quality, most current estimate for that point).
+    """
+    rows = conn.execute(
+        """
+        SELECT sr.as_of_round AS round, tf.team_no, tf.p_gold, tf.p_silver, tf.p_bronze, tf.p_any_medal
+        FROM simulation_runs sr
+        JOIN team_forecasts tf ON tf.run_id = sr.run_id
+        WHERE sr.tournament_id = ?
+          AND sr.run_id = (
+              SELECT MAX(sr2.run_id) FROM simulation_runs sr2
+              WHERE sr2.tournament_id = sr.tournament_id AND sr2.as_of_round = sr.as_of_round
+          )
+        ORDER BY sr.as_of_round
+        """,
+        (tournament_id,),
+    ).fetchall()
+    history: dict[int, list[dict]] = {}
+    for r in rows:
+        history.setdefault(r["team_no"], []).append(
+            {
+                "round": r["round"],
+                "pGold": round(r["p_gold"], 4),
+                "pSilver": round(r["p_silver"], 4),
+                "pBronze": round(r["p_bronze"], 4),
+                "pAnyMedal": round(r["p_any_medal"], 4),
+            }
+        )
+    return history
 
 
 def export_section(conn, tournament_id: str) -> dict:
@@ -84,6 +123,7 @@ def export_section(conn, tournament_id: str) -> dict:
                 p["actualScore"] = real["score"]
                 p["actualTpr"] = real["tpr"]
 
+    medal_history = _medal_history(conn, tournament_id)
     teams = []
     for r in conn.execute(
         """
@@ -109,6 +149,7 @@ def export_section(conn, tournament_id: str) -> dict:
             "actualRank": standing["rank"] if standing else None,
             "actualGamePts": round(sum(rr["ownGamePts"] for rr in team_round_results), 1) if team_round_results else None,
             "roundResults": team_round_results,
+            "medalHistory": medal_history.get(r["team_no"], []),
         })
 
     boards: dict[str, list[dict]] = {}
