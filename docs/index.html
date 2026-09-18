@@ -533,7 +533,9 @@
     document.getElementById("lb-title").textContent = d.name;
     document.getElementById("lb-meta").textContent =
       `${d.numTeams} teams · ${d.iterations.toLocaleString()} Monte Carlo iterations · ` +
-      (d.liveRound > 0 ? `round ${d.liveRound}/${d.numRounds} in progress${roundProgressSuffix(d)}` : `pre-event forecast, round 1 of ${d.numRounds} not yet played`);
+      (d.liveRound === 0 ? `pre-event forecast, round 1 of ${d.numRounds} not yet played`
+        : d.asOfRound >= d.liveRound ? `round ${d.liveRound}/${d.numRounds} complete`
+        : `round ${d.liveRound}/${d.numRounds} in progress${roundProgressSuffix(d)}`);
 
     renderTiles(d);
     renderChartMedals(d);
