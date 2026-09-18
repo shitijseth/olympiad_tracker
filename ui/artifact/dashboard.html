@@ -992,6 +992,7 @@
           el("th", {}, "Federation"),
           el("th", { class: "num" }, "Forecast TPR"),
           el("th", { class: "num live-col" }, "Actual TPR"),
+          el("th", { class: "num live-col" }, "Points"),
           el("th", { class: "num live-col" }, "Games"),
           el("th", { class: "num" }, "Medal chance"),
         )),
@@ -1004,6 +1005,7 @@
           el("td", {}, el("span", { class: "fed-chip" }, p.fed), p.team),
           el("td", { class: "num" }, String(p.tpr)),
           el("td", { class: "num live-col" }, p.actualTpr != null ? String(p.actualTpr) : "—"),
+          el("td", { class: "num live-col" }, p.actualScore != null ? fmtGamePts(p.actualScore) : "—"),
           el("td", { class: "num live-col" }, p.actualGames != null ? String(p.actualGames) : "—"),
           el("td", { class: "num" }, fmtPct(p.pMedal))));
       });
