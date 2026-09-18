@@ -153,7 +153,6 @@ def export_section(conn, tournament_id: str) -> dict:
         "name": t["name"],
         "numRounds": t["num_rounds"],
         "numTeams": len(teams),
-        "lastSynced": t["last_synced_at"],
         "generatedAt": run["created_at"],
         "asOfRound": run["as_of_round"],
         # The round the live tables should currently show, updated as soon
