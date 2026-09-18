@@ -91,7 +91,9 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     created_at      TEXT NOT NULL,
     as_of_round     INTEGER NOT NULL,     -- real rounds ingested & fixed before this sim (0 = pre-event)
     iterations      INTEGER NOT NULL,
-    notes           TEXT
+    notes           TEXT,
+    data_fingerprint TEXT   -- hash of this run's inputs; lets a recurring live-update skip
+                            -- resimulating (pure sampling noise) when nothing actually changed
 );
 
 CREATE TABLE IF NOT EXISTS team_forecasts (
@@ -132,12 +134,29 @@ CREATE INDEX IF NOT EXISTS idx_matches_tournament_round ON matches(tournament_id
 """
 
 
+# Add-column migrations for a DB created before a schema change -- SCHEMA's
+# CREATE TABLE IF NOT EXISTS only helps a brand-new DB, not one that already
+# exists on disk without the new column.
+_COLUMN_MIGRATIONS = [
+    ("simulation_runs", "data_fingerprint", "TEXT"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, column, coltype in _COLUMN_MIGRATIONS:
+        existing = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if existing and column not in {row["name"] for row in existing}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+            conn.commit()
+
+
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path else DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
+    _migrate(conn)
     return conn
 
 

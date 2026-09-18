@@ -5,7 +5,10 @@ write a human-readable markdown + CSV report.
 from __future__ import annotations
 
 import csv
+import dataclasses
 import datetime as dt
+import hashlib
+import json
 from pathlib import Path
 
 from chessolympiad.data import db
@@ -13,6 +16,26 @@ from chessolympiad.simulate.loader import get_num_rounds, load_boundary_round, l
 from chessolympiad.simulate.tournament import run_monte_carlo
 
 REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
+
+
+def _data_fingerprint(teams, rosters, num_rounds: int, iterations: int, real_rounds: dict, boundary_round) -> str:
+    """Hash of everything that actually feeds the Monte Carlo run. Sampling
+    noise means two runs on identical inputs never produce byte-identical
+    forecasts, which would otherwise make a recurring live-update look
+    "changed" (and get committed/pushed) every single cycle even when
+    chess-results.com reported nothing new. Comparing this against the
+    last stored run lets a no-op cycle skip resimulating entirely.
+    """
+    payload = {
+        "iterations": iterations,
+        "num_rounds": num_rounds,
+        "teams": [dataclasses.asdict(t) for t in teams],
+        "rosters": rosters,
+        "real_rounds": {rd: dataclasses.asdict(data) for rd, data in real_rounds.items()},
+        "boundary_round": boundary_round,
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None) -> int:
@@ -40,14 +63,26 @@ def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None)
         # complete" for the reasons above); this is an independent input.
         boundary_round = load_boundary_round(conn, tournament_id)
 
+        fingerprint = _data_fingerprint(teams, rosters, num_rounds, iterations, real_rounds, boundary_round)
+        prior = conn.execute(
+            "SELECT run_id, data_fingerprint FROM simulation_runs WHERE tournament_id = ? "
+            "ORDER BY run_id DESC LIMIT 1",
+            (tournament_id,),
+        ).fetchone()
+        if prior is not None and prior["data_fingerprint"] == fingerprint:
+            if progress:
+                progress(f"{tournament_id}: no change since run {prior['run_id']}, skipping resimulation")
+            return prior["run_id"]
+
         team_forecasts, player_forecasts = run_monte_carlo(
             teams, rosters, num_rounds, iterations,
             real_rounds=real_rounds, boundary_round=boundary_round, progress=progress,
         )
 
         cur = conn.execute(
-            "INSERT INTO simulation_runs (tournament_id, created_at, as_of_round, iterations, notes) VALUES (?,?,?,?,?)",
-            (tournament_id, dt.datetime.utcnow().isoformat(), as_of_round, iterations, None),
+            "INSERT INTO simulation_runs (tournament_id, created_at, as_of_round, iterations, notes, data_fingerprint) "
+            "VALUES (?,?,?,?,?,?)",
+            (tournament_id, dt.datetime.utcnow().isoformat(), as_of_round, iterations, None, fingerprint),
         )
         run_id = cur.lastrowid
 
