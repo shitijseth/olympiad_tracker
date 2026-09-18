@@ -215,6 +215,17 @@ def run_checks(base_url: str):
             round_label = page.locator("#sim-body").inner_text()
             check("round 1 pairings render after Start simulation", "Round" in round_label)
 
+            # How many rounds the interactive Simulate tab actually needs to
+            # play through shrinks by one every time the real tournament
+            # advances (as_of_round grows) -- derive the expectation from
+            # the live data itself (dashboard.html's own state is scoped
+            # inside an IIFE, unreachable from page.evaluate, so read the
+            # same exported JSON the page fetched instead) rather than a
+            # hardcoded round count that would otherwise need updating
+            # after every single real round.
+            d = json.loads((EXPORT_DIR / "2026-open.json").read_text())
+            min_expected = max(1, d["numRounds"] - d["asOfRound"] - 1)
+
             rounds_advanced = 0
             for _ in range(12):
                 confirm_btn = page.locator("#sim-body button", has_text="Confirm round")
@@ -231,7 +242,12 @@ def run_checks(base_url: str):
                     pass
                 rounds_advanced += 1
 
-            check("reached round 11 / tournament complete", rounds_advanced >= 10, f"only advanced {rounds_advanced} rounds")
+            check(
+                "reached round 11 / tournament complete",
+                rounds_advanced >= min_expected,
+                f"only advanced {rounds_advanced} rounds (expected >= {min_expected} given "
+                f"asOfRound={d['asOfRound']}/{d['numRounds']})",
+            )
             final_text = page.locator("#sim-body").inner_text()
             check("final standings render after playing all rounds",
                   "Tournament complete" in final_text or "Standings" in final_text, final_text[:200])

@@ -174,21 +174,23 @@ def test_fide_id_lookup_survives_a_sync_that_skips_roster_refetch(patched):
     assert row["black_fide_id"] == 1002  # team 2's roster player, fetched in the earlier call
 
 
-def test_does_not_poll_a_round_before_its_schedule_gate_opens(patched, monkeypatch):
-    """Wire-up check for the schedule gate: real gate logic is covered by
-    tests/test_schedule.py, this only confirms sync_tournament actually
-    consults it (and stops probing further rounds once closed) using the
-    real live tournament_id it's gated on.
+def test_a_not_yet_known_round_is_always_probed_regardless_of_schedule(patched):
+    """chess-results.com routinely publishes a round's pairings hours (or
+    a day) before it officially starts -- a round not yet known locally
+    must always be probed, never gated on the official start time (this
+    is the regression: round 4's pairings went unnoticed for hours
+    because an earlier version blocked exactly this).
     """
     fetch_teams, fetch_team_roster, fetch_round_board_results, db_path = patched
-    fetch_round_board_results.return_value = [_game_row(1, 1, 2)]
-
-    gate = MagicMock(side_effect=lambda tournament_id, rd: rd == 1)  # only round 1 is "open"
-    monkeypatch.setattr("chessolympiad.data.sync.schedule.round_polling_open", gate)
+    # No results yet, but pairings (result=None) are already published --
+    # exactly what chess-results.com looks like before a round starts.
+    fetch_round_board_results.side_effect = lambda tnr, rd: (
+        [_game_row(1, 1, 2, result=None)] if rd == 1 else []
+    )
 
     sync_tournament("2026-open", TNR, SECTION, YEAR, fetch_rosters=False, refetch_complete_rounds=False)
 
     fetched_rounds = [call.args[1] for call in fetch_round_board_results.call_args_list]
-    assert fetched_rounds == [1], (
-        f"expected only round 1 to be fetched (round 2's schedule gate is closed), got {fetched_rounds}"
+    assert fetched_rounds == [1, 2], (
+        f"expected round 1 (pairings, no results yet) to be fetched and round 2 probed, got {fetched_rounds}"
     )

@@ -4,23 +4,28 @@
 # both 2026 sections, re-forecasts the remaining rounds, refreshes docs/
 # (the GitHub Pages source), and pushes only if something actually changed.
 #
-# One unchanging cron entry is meant to run this year-round, every day,
-# at a fixed interval (5 min recommended -- see below) -- it does NOT
-# need per-day schedule changes for the rest day (22 Sep) or round 11's
-# earlier start time. All of that is handled inside chessolympiad.data.sync
-# itself: a tick outside any round's live window (chessolympiad.data.schedule)
-# costs just the team-list check (~2 requests) and does nothing else, and
-# a tick during a round only re-fetches that one round until it's
-# complete, never re-checking anything already settled. See sync.py's
-# module docstring for the full request-volume design.
+# One unchanging cron entry is meant to run this year-round, every day, at
+# a fixed interval (10 min currently) -- it does NOT need per-day schedule
+# changes for the rest day (22 Sep) or round 11's earlier start time; that
+# part is handled inside chessolympiad.data.sync (a round already fully
+# decided is never re-fetched, see sync.py's module docstring).
 #
-# Cadence choice: with the three gates above, idle time is nearly free, so
-# the cadence is really just "how stale can a live result be" traded
-# against request-budget margin. At 5 min: ~1000 requests/day (~50% of
-# the 2000/day cap), 5 min worst-case lag behind chess-results.com. 3 min
-# is viable too (~70% of cap) if lower latency matters more than margin;
-# 2 min or tighter isn't recommended (>90% of cap leaves no room for
-# manual checks or an unusually long round on top).
+# Every cycle still probes for the next not-yet-known round regardless of
+# what time it is or when that round is officially scheduled to start --
+# chess-results.com routinely publishes a round's pairings hours (or a
+# day) ahead of its start, and gating that probe on the official start
+# time (an earlier version of this script did) just meant those pairings
+# went unnoticed for hours. That "is there anything new yet" probe is
+# cheap (one empty request when there isn't) but, unlike a results-only
+# gate would, it runs all day rather than only during a ~7h/day live
+# window, so idle time is no longer nearly free the way it would be with
+# such a gate: roughly 2-3 round requests/section/cycle around the clock
+# (current round + next-round probe) plus the team list.
+#
+# Cadence choice, accounting for that: ~600/day at 15 min (~30% of the
+# 2000/day cap), ~860/day at 10 min (~43%), ~1700/day at 5 min (~86% --
+# not recommended, too little margin left for the daily full-refresh pass
+# or manual checks on top). 10 min is a reasonable balance.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
