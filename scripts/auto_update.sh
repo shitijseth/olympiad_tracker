@@ -5,14 +5,22 @@
 # (the GitHub Pages source), and pushes only if something actually changed.
 #
 # One unchanging cron entry is meant to run this year-round, every day,
-# at a fixed interval (15 min recommended) -- it does NOT need per-day
-# schedule changes for the rest day (22 Sep) or round 11's earlier start
-# time. All of that is handled inside chessolympiad.data.sync itself:
-# a tick outside any round's live window (chessolympiad.data.schedule)
-# costs just the team-list check (~2 requests) and does nothing else,
-# and a tick during a round only re-fetches that one round until it's
+# at a fixed interval (5 min recommended -- see below) -- it does NOT
+# need per-day schedule changes for the rest day (22 Sep) or round 11's
+# earlier start time. All of that is handled inside chessolympiad.data.sync
+# itself: a tick outside any round's live window (chessolympiad.data.schedule)
+# costs just the team-list check (~2 requests) and does nothing else, and
+# a tick during a round only re-fetches that one round until it's
 # complete, never re-checking anything already settled. See sync.py's
 # module docstring for the full request-volume design.
+#
+# Cadence choice: with the three gates above, idle time is nearly free, so
+# the cadence is really just "how stale can a live result be" traded
+# against request-budget margin. At 5 min: ~1000 requests/day (~50% of
+# the 2000/day cap), 5 min worst-case lag behind chess-results.com. 3 min
+# is viable too (~70% of cap) if lower latency matters more than margin;
+# 2 min or tighter isn't recommended (>90% of cap leaves no room for
+# manual checks or an unusually long round on top).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
