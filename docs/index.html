@@ -425,16 +425,60 @@
   };
 
   // ---------------- countdown ----------------
+  // Published FIDE schedule (chessolympiad2026.fide.com/schedule), all
+  // converted from "GMT+5" (Samarkand) to UTC -- mirrors
+  // chessolympiad/data/schedule.py's table (kept separately since this is
+  // a static page with no build step pulling from the Python source; both
+  // sides only need to agree on these fixed, published, one-time dates).
+  // No round on Sep 22 (the event's one rest day) -- round 7 resumes the
+  // 23rd; round 11 starts earlier (11:00 local) than every other round.
+  const ROUND_START_UTC = {
+    1: "2026-09-16T10:00:00Z", 2: "2026-09-17T10:00:00Z", 3: "2026-09-18T10:00:00Z",
+    4: "2026-09-19T10:00:00Z", 5: "2026-09-20T10:00:00Z", 6: "2026-09-21T10:00:00Z",
+    7: "2026-09-23T10:00:00Z", 8: "2026-09-24T10:00:00Z", 9: "2026-09-25T10:00:00Z",
+    10: "2026-09-26T10:00:00Z", 11: "2026-09-27T06:00:00Z",
+  };
+  function fmtCountdown(ms) {
+    const dd = Math.floor(ms / 86400000), hh = Math.floor((ms % 86400000) / 3600000), mm = Math.floor((ms % 3600000) / 60000);
+    return dd > 0 ? `${dd}d ${hh}h` : `${hh}h ${mm}m`;
+  }
   function tickCountdown() {
-    const start = new Date("2026-09-16T10:00:00Z").getTime(); // Round 1: 15:00 Samarkand time (UTC+5)
-    const now = Date.now();
-    const diff = start - now;
     const cd = document.getElementById("countdown");
     const label = document.getElementById("countdown-label");
-    if (diff <= 0) { cd.textContent = "Live"; label.textContent = "Olympiad underway"; return; }
-    const d = Math.floor(diff / 86400000), h = Math.floor((diff % 86400000) / 3600000);
-    cd.textContent = `${d}d ${h}h`;
-    label.textContent = "until Round 1 · 16 Sep 2026";
+    const now = Date.now();
+    const round1Start = new Date(ROUND_START_UTC[1]).getTime();
+
+    if (now < round1Start) {
+      cd.textContent = fmtCountdown(round1Start - now);
+      label.textContent = "until Round 1 · 16 Sep 2026";
+      return;
+    }
+
+    // The round most recently due to start per the published schedule --
+    // independent of whether any result has actually come in for it yet,
+    // so "Round X underway" appears the moment play should have started.
+    let scheduledRound = 0;
+    for (let r = 1; r <= 11; r++) {
+      if (now >= new Date(ROUND_START_UTC[r]).getTime()) scheduledRound = r;
+    }
+
+    const d = currentData();
+    const numRounds = d ? d.numRounds : 11;
+    const asOfRound = d ? d.asOfRound : 0;
+
+    if (asOfRound >= numRounds) { cd.textContent = "Done"; label.textContent = "Tournament complete"; return; }
+    if (asOfRound < scheduledRound) {
+      cd.textContent = "Live"; label.textContent = `Round ${scheduledRound} underway`; return;
+    }
+
+    // scheduledRound is fully decided -- count down to the next one.
+    const nextRound = scheduledRound + 1;
+    const nextStart = ROUND_START_UTC[nextRound] ? new Date(ROUND_START_UTC[nextRound]).getTime() : null;
+    if (nextStart == null) { cd.textContent = "Done"; label.textContent = "Tournament complete"; return; }
+    const diff = nextStart - now;
+    if (diff <= 0) { cd.textContent = "Live"; label.textContent = `Round ${nextRound} underway`; return; }
+    cd.textContent = fmtCountdown(diff);
+    label.textContent = `until Round ${nextRound}`;
   }
   tickCountdown(); setInterval(tickCountdown, 60000);
 
@@ -484,6 +528,7 @@
 
     document.getElementById("status-text").textContent = "Live · last forecast " + timeAgo(d.generatedAt);
     document.body.classList.toggle("live", d.liveRound > 0);
+    tickCountdown();
     const label = d.tournamentId.endsWith("women") ? "Women" : "Open";
     document.getElementById("lb-title").textContent = d.name;
     document.getElementById("lb-meta").textContent =
