@@ -174,6 +174,13 @@ def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA foreign_keys = ON")
+    # The live event now runs data-fetch (every 2 min) and resimulation
+    # (every 10 min) as two independent cron jobs against this one file --
+    # SQLite's default busy behavior is to fail a write immediately if the
+    # other process holds the lock, rather than wait. 5s comfortably covers
+    # either job's brief write bursts so the two never see a spurious
+    # "database is locked" from ordinary overlap.
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.row_factory = sqlite3.Row
     _migrate(conn)
     return conn
