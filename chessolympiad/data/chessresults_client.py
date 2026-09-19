@@ -147,25 +147,33 @@ def fetch_teams(tnr: int) -> TournamentMeta:
     # Chennai allowed multiple teams per federation and has an extra
     # "team code" column, duplicating the "Team" header). Locate columns by
     # label instead of a fixed index: the team-display-name column is
-    # always immediately before "RtgAvg", and captain immediately after.
+    # always immediately before "RtgAvg".
     #
     # chess-results.com started serving this header row with every label
     # but "No." blanked out (confirmed across a live 2026 event and two
     # long-finished historical ones alike, so it's a site-wide export
     # change, not a live-tournament quirk) -- fall back to inferring
     # columns from the first data row itself when that happens: RtgAvg is
-    # the only column in a small team-rating range, and the docstring's
-    # positional relationship (team name right before it, captain right
-    # after) still holds regardless of how many federation/code columns
-    # precede it.
+    # the only column in a small team-rating range, and the team name sits
+    # right before it regardless of how many federation/code columns
+    # precede it. There's no way to infer "Captain" positionally in that
+    # fallback case (unlike "Team", it isn't anchored next to a
+    # numeric-range column) -- rtg_col + 1 is a best-effort guess only.
+    #
+    # When headers ARE present, look up "Captain" by its own label rather
+    # than assuming it's immediately after RtgAvg: the live 2026 export
+    # has an extra "Group" column (team's division letter) in between --
+    # RtgAvg, Group, Captain -- which the old rtg_col + 1 assumption read
+    # as "A"/"B" for every single team instead of the real captain name.
     headers = df.iloc[header_idx].tolist()
     try:
         fed_col = headers.index("FED")
         rtg_col = headers.index("RtgAvg")
+        captain_col = headers.index("Captain") if "Captain" in headers else rtg_col + 1
     except ValueError:
         fed_col, rtg_col = _infer_team_columns(df, start)
+        captain_col = rtg_col + 1
     team_col = rtg_col - 1
-    captain_col = rtg_col + 1
 
     teams = []
     for i in range(start, len(df)):
