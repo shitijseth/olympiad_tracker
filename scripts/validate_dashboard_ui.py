@@ -171,7 +171,17 @@ def run_checks(base_url: str):
         rows = page.locator("#lb-table tbody tr")
         check("leaderboard table has ~208 team rows", rows.count() >= 200, f"got {rows.count()}")
         first_team = rows.nth(0).inner_text()
-        check("top seed appears at top of Open leaderboard", "United States" in first_team, first_team[:80])
+        # Self-consistency, not a hardcoded real-world favorite (which
+        # shifts as the actual tournament progresses, same reasoning as
+        # the liveRound check above): the default "rank" sort is just the
+        # export's own team order (by pAnyMedal desc), so row 1 should
+        # simply be whichever team is currently first in that order.
+        current_favorite = max(open_export["teams"], key=lambda t: t["pAnyMedal"])["name"]
+        check(
+            "current medal favorite appears at top of Open leaderboard",
+            current_favorite in first_team,
+            f"expected {current_favorite!r}, got {first_team[:80]!r}",
+        )
 
         page.click(".switch-btn[data-section='2026-women']")
         page.wait_for_function("document.getElementById('lb-title').textContent.includes('Women')", timeout=15000)

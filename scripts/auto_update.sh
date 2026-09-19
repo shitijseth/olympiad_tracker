@@ -1,31 +1,30 @@
 #!/usr/bin/env bash
 # Automated live update, meant to run on a schedule (cron) during the event
-# window (16-27 Sep 2026): re-syncs real results from chess-results.com for
-# both 2026 sections, re-forecasts the remaining rounds, refreshes docs/
-# (the GitHub Pages source), and pushes only if something actually changed.
+# window (16-27 Sep 2026): re-syncs real results for both 2026 sections,
+# re-forecasts the remaining rounds, refreshes docs/ (the GitHub Pages
+# source), and pushes only if something actually changed.
 #
-# One unchanging cron entry is meant to run this year-round, every day, at
-# a fixed interval (10 min currently) -- it does NOT need per-day schedule
-# changes for the rest day (22 Sep) or round 11's earlier start time; that
-# part is handled inside chessolympiad.data.sync (a round already fully
-# decided is never re-fetched, see sync.py's module docstring).
+# Board-level round results (the frequent, per-cycle part) come primarily
+# from lichess.org's broadcast of the event (chessolympiad.data.lichess_sync)
+# -- faster than chess-results.com (no manual arbiter entry step) and
+# explicitly welcomes automated polling, unlike chess-results.com's daily
+# request cap that got this project's IP blocked once already (see git log
+# around the incident). A not-yet-known round is always probed regardless
+# of the official schedule on both sources (pairings routinely appear
+# hours before a round's official start).
 #
-# Every cycle still probes for the next not-yet-known round regardless of
-# what time it is or when that round is officially scheduled to start --
-# chess-results.com routinely publishes a round's pairings hours (or a
-# day) ahead of its start, and gating that probe on the official start
-# time (an earlier version of this script did) just meant those pairings
-# went unnoticed for hours. That "is there anything new yet" probe is
-# cheap (one empty request when there isn't) but, unlike a results-only
-# gate would, it runs all day rather than only during a ~7h/day live
-# window, so idle time is no longer nearly free the way it would be with
-# such a gate: roughly 2-3 round requests/section/cycle around the clock
-# (current round + next-round probe) plus the team list.
-#
-# Cadence choice, accounting for that: ~600/day at 15 min (~30% of the
-# 2000/day cap), ~860/day at 10 min (~43%), ~1700/day at 5 min (~86% --
-# not recommended, too little margin left for the daily full-refresh pass
-# or manual checks on top). 10 min is a reasonable balance.
+# chess-results.com's remaining role -- team list (every cycle, 1
+# request/section) and rosters (--full-refresh only, ~once/day) -- keeps
+# its volume trivially low now (well under 1% of its daily cap), so the
+# cron cadence is no longer bound by that cap at all. It's bound instead
+# by being a reasonable Lichess citizen: per cycle, board results cost
+# roughly one request per sub-broadcast covering the currently-live round
+# (up to 5 for Open, 4 for Women's) plus an occasional (~once/day) refresh
+# of the round-ID cache when a new round appears -- modest at any cadence
+# from 15 min down to a couple of minutes. One unchanging cron entry runs
+# this year-round, every day, at a fixed interval (10 min currently) --
+# it does NOT need per-day schedule changes for the rest day (22 Sep) or
+# round 11's earlier start time (handled by "always probe" above).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,13 +39,12 @@ touch "$LOCK"
 PY=.venv/bin/python
 echo "=== $(date -u +%FT%TZ) starting auto-update ==="
 
-# Two things dominate this script's chess-results.com request volume and
-# are both almost entirely wasted work on a 10-15 min cadence: re-fetching
-# every team's roster (rarely changes mid-event) and re-fetching rounds
-# already recorded locally as fully decided (can't change short of a rare
-# post-hoc correction). Do a full refresh only once a day (persisted here
-# since a cron process starts fresh each tick) -- the still-live round is
-# always re-synced on every run regardless.
+# Rosters rarely change mid-event, and re-verifying chess-results.com's own
+# board results (kept only as an occasional cross-check against Lichess,
+# not the primary path -- see this file's header) is wasted work on a
+# 10-min cadence. Do a full refresh only once a day (persisted here since
+# a cron process starts fresh each tick) -- the still-live round is always
+# re-synced from Lichess on every run regardless.
 REFRESH_STATE=data/.last_full_refresh
 REFRESH_FLAG=""
 now_epoch=$(date -u +%s)

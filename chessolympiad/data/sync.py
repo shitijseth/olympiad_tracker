@@ -84,6 +84,7 @@ def sync_tournament(
     progress=None,
     fetch_rosters: bool = True,
     refetch_complete_rounds: bool = True,
+    fetch_round_results: bool = True,
 ) -> SyncResult:
     """Full resync: tournament metadata, teams, rosters, and every round of
     board-level results that currently has data.
@@ -103,6 +104,13 @@ def sync_tournament(
     still in progress (or not yet seen) hit chess-results.com. Pass False
     for frequent/recurring syncs and True for an occasional full refresh
     (a live tournament round can rarely get a post-hoc correction).
+
+    fetch_round_results: skip board-level round results entirely --
+    chessolympiad.data.lichess_sync is the primary source for these on the
+    live 2026 event (faster, and unlike chess-results.com has no daily
+    request cap), so the recurring live-update call only still needs this
+    for the team list + rosters. Historical/manual full-sync calls keep
+    this on since there's no Lichess broadcast to fall back on for them.
     """
     conn = db.connect()
     try:
@@ -171,54 +179,55 @@ def sync_tournament(
             key = (tournament_id, row["team_no"], _normalize_name(row["name"]))
             name_to_fide[key] = row["fide_id"]
 
-        complete_rounds = set() if refetch_complete_rounds else _complete_rounds(conn, tournament_id)
-        rounds_to_try = range(1, (max_round_probe or meta.num_rounds) + 1)
         rounds_synced = []
         total_games = 0
-        for rd in rounds_to_try:
-            if rd in complete_rounds:
-                rounds_synced.append(rd)  # already fully decided locally, no need to re-fetch
-                continue
-            games = cr.fetch_round_board_results(tnr, rd)
-            if not games:
-                break  # this round hasn't been played/published yet
-            game_rows = []
-            for g in games:
-                row = {**g, "tournament_id": tournament_id}
-                row["white_fide_id"] = name_to_fide.get(
-                    (tournament_id, row["white_team_no"], _normalize_name(row["white_name"]))
+        if fetch_round_results:
+            complete_rounds = set() if refetch_complete_rounds else _complete_rounds(conn, tournament_id)
+            rounds_to_try = range(1, (max_round_probe or meta.num_rounds) + 1)
+            for rd in rounds_to_try:
+                if rd in complete_rounds:
+                    rounds_synced.append(rd)  # already fully decided locally, no need to re-fetch
+                    continue
+                games = cr.fetch_round_board_results(tnr, rd)
+                if not games:
+                    break  # this round hasn't been played/published yet
+                game_rows = []
+                for g in games:
+                    row = {**g, "tournament_id": tournament_id}
+                    row["white_fide_id"] = name_to_fide.get(
+                        (tournament_id, row["white_team_no"], _normalize_name(row["white_name"]))
+                    )
+                    black_team_no = row["team_b_no"] if row["white_team_no"] == row["team_a_no"] else row["team_a_no"]
+                    row["black_fide_id"] = name_to_fide.get(
+                        (tournament_id, black_team_no, _normalize_name(row["black_name"]))
+                    )
+                    row["forfeit"] = int(row["forfeit"])
+                    game_rows.append(row)
+                # Delete-then-insert, not upsert-and-accumulate: chess-results.com's
+                # team_no is a starting-rank *position*, not a permanent ID -- a
+                # mid-event withdrawal shifts every later team's number down by
+                # one. Upserting by (round, team_a_no, team_b_no, board_no) would
+                # then leave the pre-shift rows sitting alongside the post-shift
+                # ones forever (same real match, two different team_no pairs),
+                # which is exactly what showed up as one team appearing twice in
+                # a single round's pairings. A full re-fetch of this round is
+                # already happening every sync regardless, so replacing its
+                # rows outright is always safe and never loses data.
+                conn.execute("DELETE FROM games WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
+                conn.execute("DELETE FROM matches WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
+                db.upsert(
+                    conn,
+                    "games",
+                    game_rows,
+                    key_cols=["tournament_id", "round", "team_a_no", "team_b_no", "board_no"],
                 )
-                black_team_no = row["team_b_no"] if row["white_team_no"] == row["team_a_no"] else row["team_a_no"]
-                row["black_fide_id"] = name_to_fide.get(
-                    (tournament_id, black_team_no, _normalize_name(row["black_name"]))
-                )
-                row["forfeit"] = int(row["forfeit"])
-                game_rows.append(row)
-            # Delete-then-insert, not upsert-and-accumulate: chess-results.com's
-            # team_no is a starting-rank *position*, not a permanent ID -- a
-            # mid-event withdrawal shifts every later team's number down by
-            # one. Upserting by (round, team_a_no, team_b_no, board_no) would
-            # then leave the pre-shift rows sitting alongside the post-shift
-            # ones forever (same real match, two different team_no pairs),
-            # which is exactly what showed up as one team appearing twice in
-            # a single round's pairings. A full re-fetch of this round is
-            # already happening every sync regardless, so replacing its
-            # rows outright is always safe and never loses data.
-            conn.execute("DELETE FROM games WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
-            conn.execute("DELETE FROM matches WHERE tournament_id = ? AND round = ?", (tournament_id, rd))
-            db.upsert(
-                conn,
-                "games",
-                game_rows,
-                key_cols=["tournament_id", "round", "team_a_no", "team_b_no", "board_no"],
-            )
-            rounds_synced.append(rd)
-            total_games += len(game_rows)
-            if progress:
-                progress(f"{tournament_id}: round {rd} synced ({len(game_rows)} boards)")
+                rounds_synced.append(rd)
+                total_games += len(game_rows)
+                if progress:
+                    progress(f"{tournament_id}: round {rd} synced ({len(game_rows)} boards)")
 
-        if rounds_synced:
-            _derive_matches(conn, tournament_id, rounds_synced)
+            if rounds_synced:
+                derive_matches(conn, tournament_id, rounds_synced)
 
         return SyncResult(
             tournament_id=tournament_id,
@@ -230,7 +239,7 @@ def sync_tournament(
         conn.close()
 
 
-def _derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
+def derive_matches(conn, tournament_id: str, rounds: list[int]) -> None:
     """Aggregate the games fact table into team-level match points per
     Article 4.9.1: >2 game points wins the match (2 MP), =2 draws (1-1),
     <2 loses (0 MP) -- computed straight from real board results, not

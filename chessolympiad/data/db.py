@@ -131,6 +131,19 @@ CREATE INDEX IF NOT EXISTS idx_games_tournament_round ON games(tournament_id, ro
 CREATE INDEX IF NOT EXISTS idx_games_white_fide ON games(white_fide_id);
 CREATE INDEX IF NOT EXISTS idx_games_black_fide ON games(black_fide_id);
 CREATE INDEX IF NOT EXISTS idx_matches_tournament_round ON matches(tournament_id, round);
+
+-- Maps a lichess.org broadcast round ID to its real-world round number,
+-- per sub-broadcast (chessolympiad.data.lichess_client.BROADCAST_IDS).
+-- Round IDs are permanent once Lichess creates them, so this is a
+-- write-once cache: refreshed only when an unrecognized round is needed,
+-- not on every sync (see lichess_sync.py).
+CREATE TABLE IF NOT EXISTS lichess_round_map (
+    broadcast_id  TEXT NOT NULL,
+    round_id      TEXT NOT NULL,
+    round_number  INTEGER NOT NULL,
+    finished      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (broadcast_id, round_id)
+);
 """
 
 
@@ -143,6 +156,12 @@ _COLUMN_MIGRATIONS = [
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
+    # Re-running SCHEMA is safe and cheap: every statement in it is CREATE
+    # TABLE/INDEX IF NOT EXISTS, so this is how a table added after a DB
+    # already exists on disk (e.g. lichess_round_map) reaches it, without
+    # needing its own one-off migration the way a new *column* does below.
+    conn.executescript(SCHEMA)
+    conn.commit()
     for table, column, coltype in _COLUMN_MIGRATIONS:
         existing = conn.execute(f"PRAGMA table_info({table})").fetchall()
         if existing and column not in {row["name"] for row in existing}:

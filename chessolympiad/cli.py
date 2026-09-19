@@ -98,15 +98,21 @@ def simulate(section: str, iterations: int = 3000):
 def live_update(section: str, iterations: int = 3000, full_refresh: bool = False):
     """Re-sync real results (idempotent) then re-simulate the remaining rounds.
 
-    full_refresh defaults to False, which skips two things that are almost
-    entirely wasted work on a frequent/recurring call but which together
-    were ~100% of this command's chess-results.com request volume: (1)
-    re-fetching every team's roster (rosters rarely change once the event
-    starts -- only rare mid-event substitutions) and (2) re-fetching rounds
-    already recorded locally as fully decided (a completed round's result
-    can't change short of a rare post-hoc correction). Only the still-live
-    round(s) get fetched. Pass --full-refresh explicitly (or let the daily
-    cron cadence do it) to re-verify everything against the live site.
+    Board-level round results now come primarily from lichess.org's
+    broadcast of the event (chessolympiad.data.lichess_sync) -- faster than
+    chess-results.com (no manual arbiter entry step) and, unlike
+    chess-results.com, has no daily request cap to worry about. chess-results.com
+    is still the source for the team list (every call, cheap) and rosters
+    (see full_refresh) since Lichess broadcasts don't carry seed/initial-rank
+    or full reserve rosters.
+
+    full_refresh defaults to False, which skips work that's almost entirely
+    wasted on a frequent/recurring call: re-fetching every team's roster
+    (rosters rarely change once the event starts) and re-verifying
+    chess-results.com's own board results for rounds Lichess already has
+    (kept only as an occasional cross-check/backstop against Lichess, not
+    the primary path). Pass --full-refresh explicitly (or let the daily
+    cron cadence do it) to re-verify everything against both live sites.
     """
     tid, tnr = TOURNAMENTS[section]
     result = sync_tournament(
@@ -117,8 +123,22 @@ def live_update(section: str, iterations: int = 3000, full_refresh: bool = False
         progress=typer.echo,
         fetch_rosters=full_refresh,
         refetch_complete_rounds=full_refresh,
+        fetch_round_results=full_refresh,
     )
-    typer.echo(f"synced: {result}")
+    typer.echo(f"synced (chess-results.com): {result}")
+
+    from chessolympiad.data import lichess_sync
+
+    conn = db.connect()
+    try:
+        num_rounds = conn.execute(
+            "SELECT num_rounds FROM tournaments WHERE tournament_id = ?", (tid,)
+        ).fetchone()["num_rounds"]
+        written = lichess_sync.sync_tournament_from_lichess(conn, tid, section, num_rounds, progress=typer.echo)
+        typer.echo(f"synced (lichess): {written} boards written")
+    finally:
+        conn.close()
+
     from chessolympiad.report.report import simulate_and_store, write_reports
 
     run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo)
