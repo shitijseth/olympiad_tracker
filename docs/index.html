@@ -123,10 +123,10 @@
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
       font-weight:600; padding:0 10px 8px; border-bottom:1px solid var(--line); white-space:nowrap; cursor:pointer; user-select:none;}
-  #lb-table{ font-size:18px; }
-  #lb-table th{ font-size:14px; }
-  #lb-table td{ padding:14px 12px; }
-  #lb-table .fed-chip{ font-size:13.5px; padding:3px 7px; }
+  #lb-table{ font-size:21px; }
+  #lb-table th{ font-size:16px; }
+  #lb-table td{ padding:16px 12px; }
+  #lb-table .fed-chip{ font-size:15px; padding:3px 8px; }
   th.num, td.num{ text-align:right; font-family:"IBM Plex Mono"; }
   th:hover{ color:var(--text); }
   th.sort-active{ color:var(--accent-strong); }
@@ -318,11 +318,11 @@
           <table id="lb-table">
             <thead><tr>
               <th class="num" data-key="seed">Seed</th>
+              <th class="num live-col" data-key="actualRank">Rank</th>
               <th data-key="name">Team</th>
               <th class="num" data-key="rtg">Rating</th>
               <th class="num live-col" data-key="actualMp">MP</th>
               <th class="num live-col" data-key="actualGamePts">GP</th>
-              <th class="num live-col" data-key="actualRank">Current rank</th>
               <th class="num" data-key="pGold">Gold</th>
               <th class="num" data-key="pSilver">Silver</th>
               <th class="num" data-key="pBronze">Bronze</th>
@@ -419,7 +419,7 @@
 (() => {
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
-  const state = { section: "2026-open", data: {}, sortKey: "rank", sortDir: 1, teamSel: null, roundSel: {} };
+  const state = { section: "2026-open", data: {}, sortKey: "actualRank", sortDir: 1, teamSel: null, roundSel: {} };
 
   const fmtPct = (x) => (x * 100).toFixed(1) + "%";
   const fmtPct0 = (x) => Math.round(x * 100) + "%";
@@ -628,12 +628,20 @@
     document.getElementById("lb-topn-val").textContent = n;
     const teams = d.teams.slice(0, n);
     const host = document.getElementById("chart-medals");
-    const w = chartWidth(host, 960), h = 420, padL = 56, padB = 112, padT = 20, padR = 12;
+    const labelFont = 18;
+    const w = chartWidth(host, 960), h = 420, padL = 56, padB = 56, padT = 20, padR = 12;
     const plotW = w - padL - padR, plotH = h - padT - padB;
     const maxPct = Math.max(10, ...teams.map(t => (t.pGold + t.pSilver + t.pBronze) * 100));
     const ticks = axisNumbers(maxPct);
     const yMax = ticks[ticks.length - 1];
     const bw = plotW / teams.length;
+    // Horizontal 3-letter fed-code labels need real width to stay
+    // readable and non-overlapping -- when there isn't enough (many teams
+    // selected via the slider, narrow bars), thin them out to every 2nd,
+    // 3rd, ... team rather than let them collide, the same technique
+    // drawRatingHistogram already uses for its bins.
+    const neededLabelW = labelFont * 0.62 * 3 + 14;
+    const labelStep = Math.max(1, Math.ceil(neededLabelW / bw));
     const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h, role: "img", "aria-label": "Medal probability by team" });
 
     ticks.forEach(t => {
@@ -656,10 +664,11 @@
         r.append(svgEl("title")); r.lastChild.textContent = `${t.name}: ${k.replace("p","")} ${val.toFixed(1)}%`;
         svg.append(r);
       });
+      if (i % labelStep !== 0) return;
       const lx = x + bwi / 2;
       const label = svgEl("text", {
-        x: 0, y: 0, "font-size": 16, fill: "var(--muted)", "font-family": "IBM Plex Sans",
-        transform: `translate(${lx}, ${padT + plotH + 18}) rotate(-52)`, "text-anchor": "end",
+        x: lx, y: padT + plotH + 26, "font-size": labelFont, fill: "var(--muted)",
+        "font-family": "IBM Plex Mono", "text-anchor": "middle",
       });
       label.textContent = t.fed; svg.append(label);
     });
@@ -691,11 +700,11 @@
       tr.addEventListener("click", () => selectTeam(t.no));
       tr.append(
         el("td", { class: "num rank-cell" }, "#" + t.seed),
+        el("td", { class: "num live-col" }, t.actualRank != null ? "#" + t.actualRank : "—"),
         el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
         el("td", { class: "num" }, String(t.rtg ?? "—")),
         el("td", { class: "num live-col" }, t.actualMp != null ? String(t.actualMp) : "—"),
         el("td", { class: "num live-col" }, t.actualGamePts != null ? fmtGamePts(t.actualGamePts) : "—"),
-        el("td", { class: "num live-col" }, t.actualRank != null ? "#" + t.actualRank : "—"),
         el("td", { class: "num" }, fmtPct(t.pGold)),
         el("td", { class: "num" }, fmtPct(t.pSilver)),
         el("td", { class: "num" }, fmtPct(t.pBronze)),
