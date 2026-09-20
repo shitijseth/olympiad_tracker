@@ -427,6 +427,21 @@
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
     return n;
   };
+  // Every chart below sets viewBox to a fixed design width but width:"100%"
+  // on the <svg> itself -- if the fixed width doesn't match the actual
+  // rendered pixel width, the browser uniformly scales the whole chart
+  // (viewBox's default "meet" behavior) to fit whichever dimension is
+  // tighter: a container *wider* than the design width just centers the
+  // chart with empty space on both sides; a container *narrower* than it
+  // (common once a sidebar + panel padding are subtracted from a normal
+  // window) shrinks everything -- axis labels included -- below their
+  // nominal font-size. Measuring the real container and using that as the
+  // viewBox width makes the scale factor always 1, so charts fill the
+  // space with no empty margins and text renders at its real declared size.
+  function chartWidth(host, fallback) {
+    const w = host && host.clientWidth;
+    return w && w > 40 ? w : fallback;
+  }
 
   // ---------------- countdown ----------------
   // Published FIDE schedule (chessolympiad2026.fide.com/schedule), all
@@ -603,7 +618,8 @@
     const n = parseInt(document.getElementById("lb-topn").value, 10);
     document.getElementById("lb-topn-val").textContent = n;
     const teams = d.teams.slice(0, n);
-    const w = 960, h = 360, padL = 46, padB = 100, padT = 16, padR = 12;
+    const host = document.getElementById("chart-medals");
+    const w = chartWidth(host, 960), h = 360, padL = 46, padB = 100, padT = 16, padR = 12;
     const plotW = w - padL - padR, plotH = h - padT - padB;
     const maxPct = Math.max(10, ...teams.map(t => (t.pGold + t.pSilver + t.pBronze) * 100));
     const ticks = axisNumbers(maxPct);
@@ -639,7 +655,6 @@
       label.textContent = t.fed; svg.append(label);
     });
 
-    const host = document.getElementById("chart-medals");
     host.innerHTML = ""; host.append(svg);
     const legend = el("div", { style: "display:flex; gap:16px; margin-top:8px; font-size:13px; color:var(--muted);" },
       legendItem("var(--gold)", "Gold"), legendItem("var(--silver)", "Silver"), legendItem("var(--bronze)", "Bronze"));
@@ -732,7 +747,7 @@
       const histPanel = el("div", { class: "panel" },
         el("div", { class: "panel-head" }, el("h2", {}, "Medal chance by round"),
           el("div", { class: "panel-sub" }, "How this forecast has moved as real results come in")));
-      histPanel.append(medalHistoryChart(t));
+      histPanel.append(medalHistoryChart(t, body.clientWidth - 44));
       body.append(histPanel);
     }
     if (t.roundResults && t.roundResults.length) {
@@ -747,7 +762,7 @@
     const distPanel = el("div", { class: "panel" },
       el("div", { class: "panel-head" }, el("h2", {}, "Final rank uncertainty"),
         el("div", { class: "panel-sub" }, "Normal approximation from the simulation's mean ± std. dev.")));
-    distPanel.append(rankDistSvg(t, d.numTeams));
+    distPanel.append(rankDistSvg(t, d.numTeams, body.clientWidth - 44));
     body.append(distPanel);
   }
   function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
@@ -889,8 +904,8 @@
     host.append(el("div", { class: "table-wrap" }, table));
   }
 
-  function rankDistSvg(t, numTeams) {
-    const w = 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
+  function rankDistSvg(t, numTeams, hostWidth) {
+    const w = hostWidth > 40 ? hostWidth : 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
     const mean = t.expRank, sd = Math.max(t.rankStd, 1);
     const lo = Math.max(1, mean - 3.2 * sd), hi = Math.min(numTeams, mean + 3.2 * sd);
     const pts = 80; const xs = Array.from({ length: pts }, (_, i) => lo + (hi - lo) * i / (pts - 1));
@@ -914,9 +929,9 @@
     return svg;
   }
 
-  function medalHistoryChart(t) {
+  function medalHistoryChart(t, hostWidth) {
     const hist = t.medalHistory;
-    const w = 900, h = 260, padL = 40, padR = 16, padT = 16, padB = 34;
+    const w = hostWidth > 40 ? hostWidth : 900, h = 260, padL = 40, padR = 16, padT = 16, padB = 34;
     const plotW = w - padL - padR, plotH = h - padT - padB;
     const minRound = hist[0].round, maxRound = hist[hist.length - 1].round;
     const roundSpan = Math.max(1, maxRound - minRound);
@@ -1021,7 +1036,8 @@
 
   // ---------------- field stats ----------------
   function drawRatingHistogram(hostId, hist) {
-    const w = 900, h = 220, padL = 34, padR = 10, padT = 10, padB = 34;
+    const host = document.getElementById(hostId);
+    const w = chartWidth(host, 900), h = 220, padL = 34, padR = 10, padT = 10, padB = 34;
     const maxC = Math.max(...hist.bins, 1);
     const bw = (w - padL - padR) / hist.bins.length;
     const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h });
@@ -1036,7 +1052,7 @@
         lab.textContent = Math.round(hist.lo + i * hist.binWidth); svg.append(lab);
       }
     });
-    const host = document.getElementById(hostId); host.innerHTML = ""; host.append(svg);
+    host.innerHTML = ""; host.append(svg);
   }
 
   function fedAverageRatings(teams) {
@@ -1673,6 +1689,20 @@
     render();
   })();
   setInterval(() => { loadSection("2026-open"); loadSection("2026-women"); }, 60000);
+
+  // Charts size themselves off their container's actual clientWidth (see
+  // chartWidth above) rather than a fixed design width, so a real resize --
+  // including entering/leaving browser fullscreen, which fires this same
+  // event -- needs to re-render them or they'd keep the stale width from
+  // whenever they last drew.
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (currentData()) render();
+      if (state.teamSel != null) renderTeamDetail();
+    }, 150);
+  });
 })();
 </script>
 
