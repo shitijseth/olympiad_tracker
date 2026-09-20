@@ -13,7 +13,7 @@ from pathlib import Path
 
 from chessolympiad.data import db
 from chessolympiad.simulate.loader import get_num_rounds, load_boundary_round, load_real_rounds, load_rosters, load_teams
-from chessolympiad.simulate.tournament import run_monte_carlo
+from chessolympiad.simulate.tournament import run_monte_carlo, run_monte_carlo_parallel
 
 REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
 
@@ -38,7 +38,9 @@ def _data_fingerprint(teams, rosters, num_rounds: int, iterations: int, real_rou
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
-def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None) -> int:
+def simulate_and_store(
+    tournament_id: str, iterations: int = 500, progress=None, max_workers: int = 1, notes: str | None = None
+) -> int:
     conn = db.connect()
     try:
         teams = load_teams(conn, tournament_id)
@@ -74,15 +76,21 @@ def simulate_and_store(tournament_id: str, iterations: int = 500, progress=None)
                 progress(f"{tournament_id}: no change since run {prior['run_id']}, skipping resimulation")
             return prior["run_id"]
 
-        team_forecasts, player_forecasts = run_monte_carlo(
-            teams, rosters, num_rounds, iterations,
-            real_rounds=real_rounds, boundary_round=boundary_round, progress=progress,
-        )
+        if max_workers and max_workers > 1:
+            team_forecasts, player_forecasts = run_monte_carlo_parallel(
+                teams, rosters, num_rounds, iterations,
+                real_rounds=real_rounds, boundary_round=boundary_round, max_workers=max_workers, progress=progress,
+            )
+        else:
+            team_forecasts, player_forecasts = run_monte_carlo(
+                teams, rosters, num_rounds, iterations,
+                real_rounds=real_rounds, boundary_round=boundary_round, progress=progress,
+            )
 
         cur = conn.execute(
             "INSERT INTO simulation_runs (tournament_id, created_at, as_of_round, iterations, notes, data_fingerprint) "
             "VALUES (?,?,?,?,?,?)",
-            (tournament_id, dt.datetime.utcnow().isoformat(), as_of_round, iterations, None, fingerprint),
+            (tournament_id, dt.datetime.utcnow().isoformat(), as_of_round, iterations, notes, fingerprint),
         )
         run_id = cur.lastrowid
 

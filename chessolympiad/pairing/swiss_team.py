@@ -75,6 +75,18 @@ def make_pairings(teams: list[TeamPairingState]) -> list[Pairing]:
     by_no = {t.team_no: t for t in teams}
     groups = _score_groups(teams)
     pairings: list[Pairing] = []
+    # Tracks who's already in `pairings`, incrementally -- avoids rescanning
+    # the whole (growing) pairings list for every team in every group just
+    # to find who's still unpaired (O(n) per team -> O(n^2) overall on a
+    # ~200-team field; this makes it O(1) per team instead).
+    paired_nos: set[int] = set()
+
+    def add_pairing(p: Pairing) -> None:
+        pairings.append(p)
+        paired_nos.add(p.team_a)
+        if p.team_b is not None:
+            paired_nos.add(p.team_b)
+
     floaters: list[TeamPairingState] = []
 
     for group in groups:
@@ -95,7 +107,7 @@ def make_pairings(teams: list[TeamPairingState]) -> list[Pairing]:
                 continue
             t2 = s2[i]
             if t2.team_no not in t1.opponents:
-                pairings.append(_pair(t1, t2))
+                add_pairing(_pair(t1, t2))
                 continue
             # collision: look for the nearest alternative in s2 not yet played
             swapped = False
@@ -103,7 +115,7 @@ def make_pairings(teams: list[TeamPairingState]) -> list[Pairing]:
                 cand = s2[j]
                 if cand.team_no not in t1.opponents:
                     s2[i], s2[j] = s2[j], s2[i]
-                    pairings.append(_pair(t1, s2[i]))
+                    add_pairing(_pair(t1, s2[i]))
                     swapped = True
                     break
             if not swapped:
@@ -112,7 +124,7 @@ def make_pairings(teams: list[TeamPairingState]) -> list[Pairing]:
         # anything left unpaired in this group (rare -- exhausted rematch
         # avoidance within the group) floats down; the next group's pairing
         # pass will retry against a fresh pool.
-        leftover_s2 = [t for t in s2 if not any(p.team_a == t.team_no or p.team_b == t.team_no for p in pairings)]
+        leftover_s2 = [t for t in s2 if t.team_no not in paired_nos]
         floaters.extend(unmatched_s1)
         floaters.extend(leftover_s2)
 
@@ -127,11 +139,11 @@ def make_pairings(teams: list[TeamPairingState]) -> list[Pairing]:
         t1 = floaters.pop(0)
         partner_idx = next((i for i, t in enumerate(floaters) if t.team_no not in t1.opponents), 0)
         t2 = floaters.pop(partner_idx)
-        pairings.append(_pair(t1, t2))
+        add_pairing(_pair(t1, t2))
     if floaters:
         bye_candidate = floaters.pop()
         if not (bye_candidate.had_bye and _swap_in_bye_free_team(bye_candidate, pairings, by_no)):
-            pairings.append(_bye(bye_candidate))
+            add_pairing(_bye(bye_candidate))
 
     return pairings
 

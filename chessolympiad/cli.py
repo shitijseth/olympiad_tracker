@@ -6,14 +6,18 @@
     python -m chessolympiad.cli calibrate             # refit the Davidson model on historical data
     python -m chessolympiad.cli backtest              # validate the calibrated model against 2022/2024
     python -m chessolympiad.cli simulate open --iterations 3000
+    python -m chessolympiad.cli simulate open --iterations 5000 --max-workers 4
     python -m chessolympiad.cli simulate women --iterations 3000
     python -m chessolympiad.cli sync-only open         # re-sync real results only, no resimulation
     python -m chessolympiad.cli live-update open       # sync-only + simulate combined, for manual/one-off use
+    python -m chessolympiad.cli deep-simulate-if-needed open  # high-iteration pass, once per completed round
 
-    The live 2026 event runs sync-only and simulate on two independent cron
-    cadences (see scripts/sync_data.sh and scripts/auto_update.sh) rather
-    than live-update's combined form -- results can usefully be fetched far
-    more often than it's worth spending CPU re-running Monte Carlo.
+    The live 2026 event runs sync-only + simulate (5000 iters, 4 workers)
+    and deep-simulate-if-needed (20000 iters, 1 worker, once per completed
+    round) on two independent cron cadences (see scripts/sync_data.sh and
+    scripts/auto_update.sh) rather than live-update's combined form --
+    results can usefully be fetched far more often than it's worth spending
+    CPU re-running Monte Carlo.
 """
 
 from __future__ import annotations
@@ -90,14 +94,54 @@ def backtest():
 
 
 @app.command()
-def simulate(section: str, iterations: int = 3000):
-    """Run the Monte Carlo forecast for one 2026 section and write reports/*.{csv,md}."""
+def simulate(section: str, iterations: int = 3000, max_workers: int = 1):
+    """Run the Monte Carlo forecast for one 2026 section and write reports/*.{csv,md}.
+
+    max_workers > 1 splits the run across worker processes (see
+    chessolympiad.simulate.tournament.run_monte_carlo_parallel), which
+    itself never uses more than cpu_count-1 workers regardless of what's
+    requested here, so an unattended cron call can't starve the machine.
+    """
     from chessolympiad.report.report import simulate_and_store, write_reports
 
     tid, _tnr = TOURNAMENTS[section]
-    run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo)
+    run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo, max_workers=max_workers)
     csv_path, md_path = write_reports(tid, run_id)
     typer.echo(f"run_id={run_id}\nwrote {csv_path}\nwrote {md_path}")
+
+
+@app.command()
+def deep_simulate_if_needed(section: str, iterations: int = 20000):
+    """Run a high-iteration, single-process forecast once a round has fully
+    completed -- meant to run on the same cadence as `simulate` but only
+    actually resimulate the first time it's called after a round wraps up.
+    Tracks progress via simulation_runs.notes='deep': compares the highest
+    as_of_round any 'deep' run has covered against the current as_of_round,
+    and no-ops if that round has already gotten its deep run.
+    """
+    from chessolympiad.report.report import simulate_and_store, write_reports
+    from chessolympiad.simulate.loader import load_real_rounds
+
+    tid, _tnr = TOURNAMENTS[section]
+    conn = db.connect()
+    try:
+        real_rounds = load_real_rounds(conn, tid, complete_only=True)
+        as_of_round = max(real_rounds.keys()) if real_rounds else 0
+        row = conn.execute(
+            "SELECT MAX(as_of_round) AS r FROM simulation_runs WHERE tournament_id = ? AND notes = 'deep'",
+            (tid,),
+        ).fetchone()
+        last_deep = row["r"] if row and row["r"] is not None else 0
+    finally:
+        conn.close()
+
+    if as_of_round == 0 or as_of_round <= last_deep:
+        typer.echo(f"{tid}: as_of_round={as_of_round}, last deep run covered round {last_deep} -- nothing to do")
+        return
+
+    run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo, notes="deep")
+    csv_path, md_path = write_reports(tid, run_id)
+    typer.echo(f"{tid}: deep run_id={run_id} (as_of_round={as_of_round})\nwrote {csv_path}\nwrote {md_path}")
 
 
 def _sync_section(section: str, full_refresh: bool, progress) -> None:
@@ -156,7 +200,7 @@ def sync_only(section: str, full_refresh: bool = False):
 
 
 @app.command()
-def live_update(section: str, iterations: int = 3000, full_refresh: bool = False):
+def live_update(section: str, iterations: int = 3000, full_refresh: bool = False, max_workers: int = 1):
     """sync-only + simulate combined, for manual/one-off use. The live 2026
     event runs these on two independent cron cadences instead (see
     scripts/sync_data.sh and scripts/auto_update.sh).
@@ -166,7 +210,7 @@ def live_update(section: str, iterations: int = 3000, full_refresh: bool = False
     from chessolympiad.report.report import simulate_and_store, write_reports
 
     tid, _tnr = TOURNAMENTS[section]
-    run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo)
+    run_id = simulate_and_store(tid, iterations=iterations, progress=typer.echo, max_workers=max_workers)
     csv_path, md_path = write_reports(tid, run_id)
     typer.echo(f"run_id={run_id}\nwrote {csv_path}\nwrote {md_path}")
 

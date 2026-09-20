@@ -21,7 +21,11 @@ PY=.venv/bin/python
 echo "=== $(date -u +%FT%TZ) starting resimulate+publish ==="
 
 for section in open women; do
-  $PY -m chessolympiad.cli simulate "$section" --iterations 5000 || echo "WARN: simulate $section failed, continuing"
+  $PY -m chessolympiad.cli simulate "$section" --iterations 5000 --max-workers 4 || echo "WARN: simulate $section failed, continuing"
+  # Once a round fully completes, also run a slower, single-process,
+  # high-iteration pass for a tighter final read on that round -- no-ops
+  # (see deep_simulate_if_needed) if that round already got one.
+  $PY -m chessolympiad.cli deep-simulate-if-needed "$section" --iterations 20000 || echo "WARN: deep-simulate-if-needed $section failed, continuing"
 done
 
 if ! $PY -m chessolympiad.report.export_artifact_data; then
