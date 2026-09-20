@@ -191,14 +191,16 @@ def run_checks(base_url: str):
         first_team = rows.nth(0).inner_text()
         # Self-consistency, not a hardcoded real-world favorite (which
         # shifts as the actual tournament progresses, same reasoning as
-        # the liveRound check above): the default "rank" sort is just the
-        # export's own team order (by pAnyMedal desc), so row 1 should
-        # simply be whichever team is currently first in that order.
-        current_favorite = max(open_export["teams"], key=lambda t: t["pAnyMedal"])["name"]
+        # the liveRound check above): the default sort is by actualRank
+        # (live standings), falling back to the export's own pAnyMedal-desc
+        # order pre-event when no team has a real rank yet.
+        ranked = [t for t in open_export["teams"] if t.get("actualRank") is not None]
+        expected_top = (min(ranked, key=lambda t: t["actualRank"]) if ranked
+                         else max(open_export["teams"], key=lambda t: t["pAnyMedal"]))["name"]
         check(
-            "current medal favorite appears at top of Open leaderboard",
-            current_favorite in first_team,
-            f"expected {current_favorite!r}, got {first_team[:80]!r}",
+            "current #1 by live rank appears at top of Open leaderboard",
+            expected_top in first_team,
+            f"expected {expected_top!r}, got {first_team[:80]!r}",
         )
 
         page.click(".switch-btn[data-section='2026-women']")
