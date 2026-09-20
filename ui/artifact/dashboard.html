@@ -170,6 +170,15 @@
   .roster-card .p-rtg{ font-family:"IBM Plex Mono"; color:var(--muted); font-size:12px; }
   .roster-card .p-actual{ font-family:"IBM Plex Mono"; color:var(--accent-strong); font-size:11.5px; margin-top:2px; padding-top:4px; border-top:1px dashed var(--line); }
 
+  .team-picker-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px; }
+  .team-picker-card{
+    border:1px solid var(--line); border-radius:10px; padding:9px 12px; background:var(--ground);
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+  }
+  .team-picker-card:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .team-picker-card .rank-cell{ font-size:12px; min-width:30px; }
+  .team-picker-card .team-name{ font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
   .searchpick{ position:relative; }
   .searchpick .results{
     position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--line);
@@ -288,8 +297,8 @@
           </div>
           <div class="controls">
             <label for="lb-topn" style="color:var(--muted); font-size:12px;">Show</label>
-            <input type="range" id="lb-topn" min="8" max="40" step="4" value="20">
-            <span class="num" id="lb-topn-val" style="font-size:12px; color:var(--muted);">20</span>
+            <input type="range" id="lb-topn" min="8" max="40" step="4" value="8">
+            <span class="num" id="lb-topn-val" style="font-size:12px; color:var(--muted);">8</span>
           </div>
         </div>
         <div id="chart-medals"><p class="empty-note">Loading medal probability chart…</p></div>
@@ -427,6 +436,21 @@
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
     return n;
   };
+  // Every chart below sets viewBox to a fixed design width but width:"100%"
+  // on the <svg> itself -- if the fixed width doesn't match the actual
+  // rendered pixel width, the browser uniformly scales the whole chart
+  // (viewBox's default "meet" behavior) to fit whichever dimension is
+  // tighter: a container *wider* than the design width just centers the
+  // chart with empty space on both sides; a container *narrower* than it
+  // (common once a sidebar + panel padding are subtracted from a normal
+  // window) shrinks everything -- axis labels included -- below their
+  // nominal font-size. Measuring the real container and using that as the
+  // viewBox width makes the scale factor always 1, so charts fill the
+  // space with no empty margins and text renders at its real declared size.
+  function chartWidth(host, fallback) {
+    const w = host && host.clientWidth;
+    return w && w > 40 ? w : fallback;
+  }
 
   // ---------------- countdown ----------------
   // Published FIDE schedule (chessolympiad2026.fide.com/schedule), all
@@ -603,7 +627,8 @@
     const n = parseInt(document.getElementById("lb-topn").value, 10);
     document.getElementById("lb-topn-val").textContent = n;
     const teams = d.teams.slice(0, n);
-    const w = 960, h = 360, padL = 46, padB = 100, padT = 16, padR = 12;
+    const host = document.getElementById("chart-medals");
+    const w = chartWidth(host, 960), h = 360, padL = 46, padB = 100, padT = 16, padR = 12;
     const plotW = w - padL - padR, plotH = h - padT - padB;
     const maxPct = Math.max(10, ...teams.map(t => (t.pGold + t.pSilver + t.pBronze) * 100));
     const ticks = axisNumbers(maxPct);
@@ -639,7 +664,6 @@
       label.textContent = t.fed; svg.append(label);
     });
 
-    const host = document.getElementById("chart-medals");
     host.innerHTML = ""; host.append(svg);
     const legend = el("div", { style: "display:flex; gap:16px; margin-top:8px; font-size:13px; color:var(--muted);" },
       legendItem("var(--gold)", "Gold"), legendItem("var(--silver)", "Silver"), legendItem("var(--bronze)", "Bronze"));
@@ -705,13 +729,28 @@
   // ---------------- team detail ----------------
   function selectTeam(no) {
     state.teamSel = no;
-    setView("team");
-    renderTeamDetail();
+    setView("team"); // renders team-detail-body too, see setView
   }
   function renderTeamDetail() {
     const d = currentData();
     const body = document.getElementById("team-detail-body");
-    if (!d || state.teamSel == null) { body.innerHTML = ""; body.append(el("p", { class: "empty-note" }, "Select a team to see its forecast, roster, and rank distribution.")); return; }
+    if (!d || state.teamSel == null) {
+      body.innerHTML = "";
+      if (!d) { body.append(el("p", { class: "empty-note" }, "Loading teams…")); return; }
+      body.append(el("p", { class: "panel-sub", style: "margin-bottom:12px;" },
+        "Pick a team below (or search above) to see its forecast, roster, and rank distribution."));
+      const grid = el("div", { class: "team-picker-grid" });
+      d.teams.forEach((t, i) => {
+        const card = el("div", { class: "team-picker-card" },
+          el("span", { class: "rank-cell" }, "#" + (i + 1)),
+          el("span", { class: "fed-chip" }, t.fed),
+          el("span", { class: "team-name" }, t.name));
+        card.addEventListener("click", () => selectTeam(t.no));
+        grid.append(card);
+      });
+      body.append(grid);
+      return;
+    }
     const t = d.teams.find(x => x.no === state.teamSel);
     if (!t) { body.innerHTML = ""; body.append(el("p", { class: "empty-note" }, "Team not found in this section.")); return; }
     const rank = d.teams.indexOf(t) + 1;
@@ -732,7 +771,7 @@
       const histPanel = el("div", { class: "panel" },
         el("div", { class: "panel-head" }, el("h2", {}, "Medal chance by round"),
           el("div", { class: "panel-sub" }, "How this forecast has moved as real results come in")));
-      histPanel.append(medalHistoryChart(t));
+      histPanel.append(medalHistoryChart(t, body.clientWidth - 44));
       body.append(histPanel);
     }
     if (t.roundResults && t.roundResults.length) {
@@ -747,7 +786,7 @@
     const distPanel = el("div", { class: "panel" },
       el("div", { class: "panel-head" }, el("h2", {}, "Final rank uncertainty"),
         el("div", { class: "panel-sub" }, "Normal approximation from the simulation's mean ± std. dev.")));
-    distPanel.append(rankDistSvg(t, d.numTeams));
+    distPanel.append(rankDistSvg(t, d.numTeams, body.clientWidth - 44));
     body.append(distPanel);
   }
   function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
@@ -889,8 +928,8 @@
     host.append(el("div", { class: "table-wrap" }, table));
   }
 
-  function rankDistSvg(t, numTeams) {
-    const w = 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
+  function rankDistSvg(t, numTeams, hostWidth) {
+    const w = hostWidth > 40 ? hostWidth : 900, h = 180, padL = 30, padR = 30, padT = 10, padB = 28;
     const mean = t.expRank, sd = Math.max(t.rankStd, 1);
     const lo = Math.max(1, mean - 3.2 * sd), hi = Math.min(numTeams, mean + 3.2 * sd);
     const pts = 80; const xs = Array.from({ length: pts }, (_, i) => lo + (hi - lo) * i / (pts - 1));
@@ -914,9 +953,9 @@
     return svg;
   }
 
-  function medalHistoryChart(t) {
+  function medalHistoryChart(t, hostWidth) {
     const hist = t.medalHistory;
-    const w = 900, h = 260, padL = 40, padR = 16, padT = 16, padB = 34;
+    const w = hostWidth > 40 ? hostWidth : 900, h = 260, padL = 40, padR = 16, padT = 16, padB = 34;
     const plotW = w - padL - padR, plotH = h - padT - padB;
     const minRound = hist[0].round, maxRound = hist[hist.length - 1].round;
     const roundSpan = Math.max(1, maxRound - minRound);
@@ -1021,7 +1060,8 @@
 
   // ---------------- field stats ----------------
   function drawRatingHistogram(hostId, hist) {
-    const w = 900, h = 220, padL = 34, padR = 10, padT = 10, padB = 34;
+    const host = document.getElementById(hostId);
+    const w = chartWidth(host, 900), h = 220, padL = 34, padR = 10, padT = 10, padB = 34;
     const maxC = Math.max(...hist.bins, 1);
     const bw = (w - padL - padR) / hist.bins.length;
     const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, width: "100%", height: h });
@@ -1036,7 +1076,7 @@
         lab.textContent = Math.round(hist.lo + i * hist.binWidth); svg.append(lab);
       }
     });
-    const host = document.getElementById(hostId); host.innerHTML = ""; host.append(svg);
+    host.innerHTML = ""; host.append(svg);
   }
 
   function fedAverageRatings(teams) {
@@ -1659,6 +1699,7 @@
     document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
     if (view === "simulate") renderSim();
+    if (view === "team") renderTeamDetail();
   }
   document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
   document.querySelectorAll(".switch-btn").forEach(b => b.addEventListener("click", () => {
@@ -1673,6 +1714,20 @@
     render();
   })();
   setInterval(() => { loadSection("2026-open"); loadSection("2026-women"); }, 60000);
+
+  // Charts size themselves off their container's actual clientWidth (see
+  // chartWidth above) rather than a fixed design width, so a real resize --
+  // including entering/leaving browser fullscreen, which fires this same
+  // event -- needs to re-render them or they'd keep the stale width from
+  // whenever they last drew.
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (currentData()) render();
+      if (state.teamSel != null) renderTeamDetail();
+    }, 150);
+  });
 })();
 </script>
 

@@ -118,6 +118,24 @@ def run_checks(base_url: str):
         check("tournament logo image loaded", page.evaluate("document.querySelector('.brand-logo').naturalWidth > 0"))
         check("ChessBase India logo image loaded", page.evaluate("document.querySelector('.broadcast-logo').naturalWidth > 0"))
 
+        # Team detail: navigating there directly (not via a leaderboard row
+        # click) used to leave it on the static "select a team" placeholder
+        # forever, since setView() only special-cased the simulate tab --
+        # confirm it now shows every team as a clickable card instead, and
+        # that clicking one actually navigates. Must run before any other
+        # check selects a team (state.teamSel, once set, is never cleared).
+        page.click(".nav-btn[data-view='team']")
+        page.wait_for_timeout(300)
+        picker_cards = page.locator("#team-detail-body .team-picker-card")
+        check("Team detail shows a full team-picker grid when opened directly",
+              picker_cards.count() >= 200, f"got {picker_cards.count()}")
+        picker_cards.nth(2).click()
+        page.wait_for_timeout(300)
+        check("clicking a team-picker card navigates to that team's detail",
+              "team-header" in page.locator("#team-detail-body").inner_html())
+        page.click(".nav-btn[data-view='leaderboard']")
+        page.wait_for_timeout(150)
+
         page.locator("#lb-table tbody tr").first.click()
         page.wait_for_timeout(200)
         check(
