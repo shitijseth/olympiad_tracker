@@ -145,8 +145,16 @@ def export_section(conn, tournament_id: str) -> dict:
             "rankStd": round(r["rank_std"], 1),
             "roster": rosters.get(r["team_no"], []),
             # Real results so far -- absent/None pre-event (as_of_round=0).
+            # actualMp is chess-results.com's own "TB1" column (it's also
+            # the primary sort key, ahead of any real tiebreak); actualTb2/
+            # 3/4 are its TB2/TB3/TB4 -- see chessolympiad.simulate.tiebreak
+            # for the exact Annex 2.I formulas (verified byte-for-byte
+            # against the live chess-results.com round-5 Open standings).
             "actualMp": standing["mp"] if standing else None,
             "actualRank": standing["rank"] if standing else None,
+            "actualTb2": standing["tb"][0] if standing else None,
+            "actualTb3": standing["tb"][1] if standing else None,
+            "actualTb4": standing["tb"][2] if standing else None,
             "actualGamePts": round(sum(rr["ownGamePts"] for rr in team_round_results), 1) if team_round_results else None,
             "roundResults": team_round_results,
             "medalHistory": medal_history.get(r["team_no"], []),

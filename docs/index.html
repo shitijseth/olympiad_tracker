@@ -776,6 +776,9 @@
         tile("Expected match points", t.expMp.toFixed(1) + ` / ${d.numRounds * 2}`, `top-8 ${fmtPct0(t.pTop8)} · top-16 ${fmtPct0(t.pTop16)}`),
       ),
     );
+    if (t.actualRank != null) {
+      body.append(liveStandingPanel(t));
+    }
     if (t.medalHistory && t.medalHistory.length > 1) {
       const histPanel = el("div", { class: "panel" },
         el("div", { class: "panel-head" }, el("h2", {}, "Medal chance by round"),
@@ -799,6 +802,19 @@
     body.append(distPanel);
   }
   function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
+  function fmtTb(x) { return Number.isInteger(x) ? String(x) : x.toFixed(1); }
+  function liveStandingPanel(t) {
+    return el("div", { class: "panel" },
+      el("div", { class: "panel-head" }, el("h2", {}, "Live standing"),
+        el("div", { class: "panel-sub" }, "chess-results.com's own tiebreak order (Annex 2.I) — match points, then TB2, TB3, TB4")),
+      el("div", { class: "grid-tiles" },
+        tile("Rank", "#" + t.actualRank, "current official standing"),
+        tile("Match points (TB1)", String(t.actualMp), "primary criterion"),
+        tile("TB2", fmtTb(t.actualTb2), "Sonneborn–Berger: game score vs. each opponent × their match points, weakest opponent dropped"),
+        tile("TB3", fmtTb(t.actualTb3), "total game points scored"),
+        tile("TB4", fmtTb(t.actualTb4), "sum of opponents' match points, weakest dropped"),
+      ));
+  }
   function rosterGrid(roster) {
     const g = el("div", { class: "roster-grid" });
     for (const p of (roster || []).slice().sort((a, b) => a.board - b.board)) {

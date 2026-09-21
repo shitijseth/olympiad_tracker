@@ -145,6 +145,15 @@ def run_checks(base_url: str):
                 "&& document.querySelectorAll('#team-detail-body svg path[stroke]').length >= 4"
             ),
         )
+        check(
+            "team detail shows a Live standing panel with all 4 chess-results.com tiebreaks",
+            page.evaluate(
+                "document.getElementById('team-detail-body').innerHTML.includes('Live standing') "
+                "&& document.getElementById('team-detail-body').innerHTML.includes('TB2') "
+                "&& document.getElementById('team-detail-body').innerHTML.includes('TB3') "
+                "&& document.getElementById('team-detail-body').innerHTML.includes('TB4')"
+            ),
+        )
         page.click(".nav-btn[data-view='leaderboard']")
         page.wait_for_timeout(15)
 
