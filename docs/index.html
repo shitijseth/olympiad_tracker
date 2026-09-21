@@ -782,10 +782,15 @@
       body.append(liveStandingPanel(t));
     }
     if (t.medalHistory && t.medalHistory.length > 1) {
+      const lastCheckpoint = t.medalHistory[t.medalHistory.length - 1].round;
+      const roundLive = d.liveRound > lastCheckpoint;
       const histPanel = el("div", { class: "panel" },
         el("div", { class: "panel-head" }, el("h2", {}, "Medal chance by round"),
-          el("div", { class: "panel-sub" }, "How this forecast has moved as real results come in")));
-      histPanel.append(medalHistoryChart(t, body.clientWidth - 44));
+          el("div", { class: "panel-sub" },
+            roundLive
+              ? `How this forecast has moved as real results come in — the last point updates continuously through Round ${d.liveRound}; a new milestone appears once that round is fully decided for every team`
+              : "How this forecast has moved as real results come in")));
+      histPanel.append(medalHistoryChart(t, body.clientWidth - 44, d.liveRound));
       body.append(histPanel);
     }
     if (t.roundResults && t.roundResults.length) {
