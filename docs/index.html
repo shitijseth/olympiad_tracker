@@ -1027,13 +1027,19 @@
       const lab = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 10.5, fill: "var(--muted)", "font-family": "IBM Plex Mono" });
       lab.textContent = v + "%"; svg.append(lab);
     });
-    hist.forEach(pt => {
-      const r = xRound(pt);
+    // Label every round on the timeline, not just the ones with their own
+    // stored milestone -- there's only ever one row per as_of_round value
+    // (continuously overwritten by the latest run at that milestone, see
+    // _medal_history), so repositioning the last point to liveRound's
+    // x-coordinate would otherwise make its own former round (still a real
+    // point in time) vanish from the axis entirely, reading as a skipped
+    // round rather than "no separate milestone was ever recorded for it".
+    for (let r = minRound; r <= maxRound; r++) {
       const lab = svgEl("text", { x: px(r), y: h - 10, "text-anchor": "middle", "font-size": 10.5, fill: "var(--muted)", "font-family": "IBM Plex Sans" });
       const base = r === 0 ? "Pre-event" : "R" + r;
-      lab.textContent = (pt === lastPt && liveTrailingPoint) ? base + " · live" : base;
+      lab.textContent = (r === liveRound && liveTrailingPoint) ? base + " · live" : base;
       svg.append(lab);
-    });
+    }
 
     const series = [
       ["pAnyMedal", "var(--accent-strong)", 2.4, "Any medal"],
