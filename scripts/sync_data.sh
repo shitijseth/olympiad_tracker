@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# SUPERSEDED for the live cron cadence by scripts/scheduler.sh (see that
+# file), which varies sync frequency by whether a round is actually active
+# instead of this script's unconditional 2-minute cadence. Kept only for
+# manual/one-off use -- not in crontab.
+#
 # Data-fetch half of the live 2026 update pipeline -- runs far more often
 # than scripts/auto_update.sh (2 min vs. 10) since re-syncing real results
 # is cheap and worth doing frequently, but resimulating/publishing on every

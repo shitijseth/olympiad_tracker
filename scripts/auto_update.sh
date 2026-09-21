@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# SUPERSEDED for the live cron cadence by scripts/scheduler.sh (see that
+# file), which resimulates every 5 min with 4 workers during a round's
+# active window instead of this script's unconditional 10-minute cadence.
+# Kept only for manual/one-off use -- not in crontab.
+#
 # Resimulate + publish half of the live 2026 update pipeline -- runs every
 # 10 min, independently of scripts/sync_data.sh's 2-min data-fetch cadence
 # (see that script's header for why they're split). Reads whatever the
