@@ -16,6 +16,7 @@
 # or after 1 hour with no new lichess results (stuck/disputed game) -- see
 # tick()'s docstring in chessolympiad/cli.py for the exact rule.
 set -uo pipefail
+set -m  # job control: the backgrounded tick below gets its own process group, so a timeout kill can take its children (e.g. ProcessPoolExecutor sim workers) down with it, not just the tick process itself
 cd "$(dirname "$0")/.."
 
 LOCK=/tmp/olympiad_scheduler.lock
@@ -27,7 +28,35 @@ trap 'rm -f "$LOCK"' EXIT
 touch "$LOCK"
 
 PY=.venv/bin/python
-OUT=$($PY -m chessolympiad.cli tick 2>&1)
+
+# A tick should never legitimately run anywhere near this long -- the
+# worst normal case is both sections needing their 5-min resimulation AND
+# their once-per-round 20000-iteration/1-worker deep run in the same
+# cycle, comfortably under 15 minutes even on a loaded machine. This
+# exists purely to recover from a genuine hang (seen once in production:
+# a lichess network call stalled indefinitely under host memory pressure)
+# rather than to bound normal operation -- without it, a hung tick holds
+# LOCK forever and silently freezes the whole pipeline, since every later
+# cron invocation just sees the lock and skips.
+TICK_TIMEOUT=1800
+TICK_OUT=$(mktemp)
+$PY -m chessolympiad.cli tick > "$TICK_OUT" 2>&1 &
+TICK_PID=$!
+waited=0
+while kill -0 "$TICK_PID" 2>/dev/null; do
+  if [ "$waited" -ge "$TICK_TIMEOUT" ]; then
+    echo "$(date -u +%FT%TZ) ERROR: tick exceeded ${TICK_TIMEOUT}s (pid $TICK_PID) -- killing its process group and skipping this cycle's publish" >> "$TICK_OUT"
+    kill -TERM -- -"$TICK_PID" 2>/dev/null
+    sleep 3
+    kill -KILL -- -"$TICK_PID" 2>/dev/null
+    break
+  fi
+  sleep 5
+  waited=$((waited + 5))
+done
+wait "$TICK_PID" 2>/dev/null
+OUT=$(cat "$TICK_OUT")
+rm -f "$TICK_OUT"
 echo "$OUT"
 
 if ! echo "$OUT" | grep -q "^PUBLISH=1$"; then

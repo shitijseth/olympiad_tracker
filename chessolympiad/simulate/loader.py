@@ -141,23 +141,38 @@ def load_boundary_round(conn: sqlite3.Connection, tournament_id: str) -> tuple[i
     results can be locked in as fixed rather than re-rolled by the Monte
     Carlo model, with only the boards still unplayed actually simulated.
 
-    Returns (round_number, game_rows) for the lowest-numbered round with
-    any published games that ISN'T complete, or None if every published
-    round is already complete (nothing in progress) or nothing has been
-    published at all yet (pre-event). A tournament only ever has at most
-    one such round at a time in practice (chess-results doesn't publish
-    round N+1 pairings before round N is essentially done), but this
-    picks the lowest if more than one ever qualifies, to stay adjacent to
-    whatever's already been ingested as complete.
+    Returns (round_number, game_rows) for the lowest-numbered incomplete
+    round that comes AFTER the last fully-complete round, or None if every
+    published round is already complete (nothing in progress) or nothing
+    has been published at all yet (pre-event). A tournament only ever has
+    at most one such round at a time in practice (chess-results doesn't
+    publish round N+1 pairings before round N is essentially done), but
+    this picks the lowest if more than one ever qualifies, to stay
+    adjacent to whatever's already been ingested as complete.
+
+    Deliberately NOT just "the lowest incomplete round": a round can have
+    one permanently-missing board (a walkover/forfeit chess-results.com
+    never posts a result for) long after the tournament has moved past it
+    -- an earlier version of this picked that abandoned round forever once
+    one appeared, so every subsequent day's genuinely-in-progress round
+    was silently ignored and fully synthesized instead of seeded with its
+    real, already-known results.
     """
+    complete_rows = conn.execute(
+        "SELECT round FROM games WHERE tournament_id = ? "
+        "GROUP BY round HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) = 0",
+        (tournament_id,),
+    ).fetchall()
+    max_complete = max((r["round"] for r in complete_rows), default=0)
+
     rows = conn.execute(
         """
         SELECT round FROM games WHERE tournament_id = ?
         GROUP BY round
-        HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) > 0
+        HAVING SUM(CASE WHEN result IS NULL OR result = '' THEN 1 ELSE 0 END) > 0 AND round > ?
         ORDER BY round
         """,
-        (tournament_id,),
+        (tournament_id, max_complete),
     ).fetchall()
     if not rows:
         return None

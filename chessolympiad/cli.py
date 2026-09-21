@@ -112,13 +112,15 @@ def simulate(section: str, iterations: int = 3000, max_workers: int = 1):
     typer.echo(f"run_id={run_id}\nwrote {csv_path}\nwrote {md_path}")
 
 
-def _deep_simulate_if_needed(section: str, iterations: int = 20000, progress=None) -> None:
+def _deep_simulate_if_needed(section: str, iterations: int = 20000, progress=None) -> bool:
     """Run a high-iteration, single-process forecast once a round has fully
     completed -- meant to be called on a tight cadence but only actually
     resimulate the first time it's called after a round wraps up. Tracks
     progress via simulation_runs.notes='deep': compares the highest
     as_of_round any 'deep' run has covered against the current as_of_round,
-    and no-ops if that round has already gotten its deep run.
+    and no-ops if that round has already gotten its deep run. Returns
+    whether it actually resimulated, so a caller like tick() knows whether
+    there's something new worth publishing.
     """
     from chessolympiad.report.report import simulate_and_store, write_reports
     from chessolympiad.simulate.loader import load_real_rounds
@@ -139,11 +141,12 @@ def _deep_simulate_if_needed(section: str, iterations: int = 20000, progress=Non
 
     if as_of_round == 0 or as_of_round <= last_deep:
         progress(f"{tid}: as_of_round={as_of_round}, last deep run covered round {last_deep} -- nothing to do")
-        return
+        return False
 
     run_id = simulate_and_store(tid, iterations=iterations, progress=progress, notes="deep")
     csv_path, md_path = write_reports(tid, run_id)
     progress(f"{tid}: deep run_id={run_id} (as_of_round={as_of_round})\nwrote {csv_path}\nwrote {md_path}")
+    return True
 
 
 @app.command()
@@ -338,10 +341,6 @@ def tick():
                     write_reports(tid, run_id)
                 except Exception as e:  # noqa: BLE001 -- see above
                     typer.echo(f"WARN: simulate {section} failed, continuing: {e}")
-                try:
-                    _deep_simulate_if_needed(section, progress=typer.echo)
-                except Exception as e:  # noqa: BLE001 -- see above
-                    typer.echo(f"WARN: deep-simulate-if-needed {section} failed, continuing: {e}")
             state.mark_done("active_sim", now)
             did_work = True
     else:
@@ -357,6 +356,22 @@ def tick():
                 state.mark_done("full_refresh", now)
             state.mark_done("not_active_fetch", now)
             did_work = True
+
+    # Checked every tick regardless of phase, not just while active: a
+    # round can finish and the window can close to not-active in the same
+    # tick that first observes the completion (e.g. this tick's own sync
+    # just saw the last board land), which used to mean this section's
+    # deep run never got a tick where BOTH "the round just finished" and
+    # "we're still in the active branch" were true at once -- it was
+    # silently skipped until manually noticed. This check is cheap (one
+    # query per section) whenever nothing's actually due, so paying it
+    # unconditionally is worth never missing a round's deep run again.
+    for section in TOURNAMENTS:
+        try:
+            if _deep_simulate_if_needed(section, progress=typer.echo):
+                did_work = True
+        except Exception as e:  # noqa: BLE001 -- see above
+            typer.echo(f"WARN: deep-simulate-if-needed {section} failed, continuing: {e}")
 
     typer.echo(f"PUBLISH={'1' if did_work else '0'}")
 
