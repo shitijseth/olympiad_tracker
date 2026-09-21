@@ -47,7 +47,7 @@ def _player(name, rating, board):
     return {"board": board, "name": name, "title": "GM", "rating": rating, "fed": "AAA", "fideId": board}
 
 
-def build_payload():
+def build_payload(strip_tb_from_team=None):
     """4 teams, 2 real rounds played (team 1 beat everyone), round 3 onward
     left to the forecast/simulator -- matches export_artifact_data.py's
     schema exactly (see chessolympiad/report/export_artifact_data.py and
@@ -70,6 +70,9 @@ def build_payload():
             "roster": roster,
             "actualMp": {1: 4, 2: 0, 3: 2, 4: 2}[no],
             "actualRank": {1: 1, 2: 4, 3: 2, 4: 2}[no],
+            "actualTb2": {1: 12.5, 2: 4.0, 3: 8.0, 4: 8.0}[no],
+            "actualTb3": {1: 5.5, 2: 3.0, 3: 4.0, 4: 4.0}[no],
+            "actualTb4": {1: 2, 2: 4, 3: 3, 4: 3}[no],
             "actualGamePts": {1: 5.5, 2: 3.0, 3: 4.0, 4: 4.0}[no],
             "roundResults": [
                 {
@@ -94,6 +97,14 @@ def build_payload():
                 },
             ],
         })
+    if strip_tb_from_team is not None:
+        # Simulates a stale cached data/<id>.json fetched against a newer
+        # dashboard.html that expects actualTb2/3/4 -- these are fetched as
+        # a separate static file from the page itself, so a deploy can
+        # briefly serve exactly this combination. Must degrade to "--", not
+        # throw and crash the whole Team detail render.
+        stale = next(t for t in teams if t["no"] == strip_tb_from_team)
+        del stale["actualTb2"], stale["actualTb3"], stale["actualTb4"]
 
     boards = {}
     for b in range(1, 5):
@@ -161,10 +172,10 @@ def build_payload():
     }
 
 
-def build_harness(tmp_dir: Path) -> Path:
+def build_harness(tmp_dir: Path, strip_tb_from_team=None) -> Path:
     data_dir = tmp_dir / "data"
     data_dir.mkdir()
-    payload = build_payload()
+    payload = build_payload(strip_tb_from_team=strip_tb_from_team)
     (data_dir / "2026-open.json").write_text(json.dumps(payload), encoding="utf-8")
     (data_dir / "2026-women.json").write_text(json.dumps(payload), encoding="utf-8")
 
@@ -188,6 +199,34 @@ def serve(tmp_dir: Path, port: int):
     return httpd
 
 
+def run_stale_tb_check(base_url: str):
+    """Regression check for a real crash this file caught: fmtTb() called
+    .toFixed on an undefined actualTb2/3/4 and threw, taking down the whole
+    Team detail render, whenever those fields were missing (a stale cached
+    data/<id>.json fetched against a dashboard.html newer than it -- see
+    ui/artifact/dashboard.html's fmtTb docstring comment for the fix)."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": 1400, "height": 1100})
+        page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+        page.on("pageerror", lambda exc: console_errors.append(f"{exc}\n{getattr(exc, 'stack', '')}"))
+
+        page.goto(base_url, wait_until="networkidle", timeout=20000)
+        page.wait_for_function("document.querySelectorAll('#lb-table tbody tr').length > 0", timeout=15000)
+        page.click(".nav-btn[data-view='team']")
+        search = page.locator("#team-search")
+        search.click(); search.fill("Alpha")
+        page.wait_for_timeout(200)
+        page.locator(".result-row").first.click()
+        page.wait_for_timeout(300)
+        body_text = page.locator("#team-detail-body").inner_text()
+        check("team with missing TB2/3/4 still renders Live standing without crashing",
+              "Live standing" in body_text, body_text[:400])
+        check("missing TB values degrade to '—' instead of throwing", "—" in body_text)
+        check("no uncaught JS console error from the missing TB fields", len(console_errors) == 0, "; ".join(console_errors[:5]))
+        browser.close()
+
+
 def main():
     port = 8941
     with tempfile.TemporaryDirectory() as tmp:
@@ -196,6 +235,17 @@ def main():
         httpd = serve(tmp_dir, port)
         try:
             run_checks(f"http://127.0.0.1:{port}/dashboard.html")
+        finally:
+            httpd.shutdown()
+
+    console_errors.clear()
+    port2 = 8942
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        build_harness(tmp_dir, strip_tb_from_team=1)
+        httpd = serve(tmp_dir, port2)
+        try:
+            run_stale_tb_check(f"http://127.0.0.1:{port2}/dashboard.html")
         finally:
             httpd.shutdown()
 
@@ -239,6 +289,8 @@ def run_checks(base_url: str):
         page.wait_for_timeout(300)
         body_text = page.locator("#team-detail-body").inner_text()
         check("Team detail shows 'Results so far' panel", "Results so far" in body_text, body_text[:200])
+        check("Team detail shows the Live standing panel with real TB values",
+              "Live standing" in body_text and "TB2" in body_text and "12.5" in body_text, body_text[:400])
         check("Roster shows a player's own real games/score/TPR so far", "so far" in body_text and "TPR" in body_text, body_text[:400])
         check("round history shows both rounds with a result pill", "#1" in body_text and "#2" in body_text)
         boards_btns = page.locator("#team-detail-body button", has_text="Boards")

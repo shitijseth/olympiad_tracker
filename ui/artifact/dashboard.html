@@ -804,14 +804,20 @@
     body.append(distPanel);
   }
   function tile(label, value, sub) { return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)); }
-  function fmtTb(x) { return Number.isInteger(x) ? String(x) : x.toFixed(1); }
+  // Defensive against a missing value, not just a formatting nicety: a
+  // stale cached data/<id>.json (fetched separately from dashboard.html,
+  // so a deploy can briefly serve old data against new code) might predate
+  // these fields entirely, and this must degrade to "—" rather than throw
+  // and crash the whole Team detail render (undefined.toFixed did exactly
+  // that before this fix -- caught by validate_dashboard_live_ui.py).
+  function fmtTb(x) { return x == null ? "—" : (Number.isInteger(x) ? String(x) : x.toFixed(1)); }
   function liveStandingPanel(t) {
     return el("div", { class: "panel" },
       el("div", { class: "panel-head" }, el("h2", {}, "Live standing"),
         el("div", { class: "panel-sub" }, "chess-results.com's own tiebreak order (Annex 2.I) — match points, then TB2, TB3, TB4")),
       el("div", { class: "grid-tiles" },
         tile("Rank", "#" + t.actualRank, "current official standing"),
-        tile("Match points (TB1)", String(t.actualMp), "primary criterion"),
+        tile("Match points (TB1)", t.actualMp != null ? String(t.actualMp) : "—", "primary criterion"),
         tile("TB2", fmtTb(t.actualTb2), "Sonneborn–Berger: game score vs. each opponent × their match points, weakest opponent dropped"),
         tile("TB3", fmtTb(t.actualTb3), "total game points scored"),
         tile("TB4", fmtTb(t.actualTb4), "sum of opponents' match points, weakest dropped"),
