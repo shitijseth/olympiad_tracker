@@ -254,6 +254,21 @@ FULL_REFRESH_INTERVAL = 79200  # ~22h, drifts earlier each day rather than later
 IDLE_TIMEOUT = 3600  # fall back to not-active if a round goes this long with no new lichess results
 
 
+def _idle_clock_should_advance(any_new: bool, any_failure: bool) -> bool:
+    """Whether this tick's lichess poll is grounds to push the active-
+    window idle deadline forward. True when something genuinely changed
+    (any_new) or when a poll simply failed and we couldn't tell either way
+    (any_failure, e.g. a network blip) -- only a poll that fully SUCCEEDED
+    and found nothing new is real evidence the round has gone quiet, so
+    that's the one case this returns False for, letting the countdown
+    keep ticking. Treating a failure the same as confirmed silence was a
+    real bug: a string of transient network errors during an otherwise
+    live round tripped IDLE_TIMEOUT and silently stranded the whole round
+    in the slow not-active cadence for the rest of the day.
+    """
+    return any_new or any_failure
+
+
 @app.command()
 def tick():
     """Single entry point for the live cron scheduler -- see
@@ -301,16 +316,18 @@ def tick():
     if is_active:
         typer.echo(f"tick: ACTIVE (round {round_no})")
         any_new = False
+        any_failure = False
         for section in TOURNAMENTS:
             try:
                 written = _sync_lichess_only(section, typer.echo)
             except Exception as e:  # noqa: BLE001 -- one section's transient failure (rate limit, network) must not block the other or crash the tick
                 typer.echo(f"WARN: {section} lichess sync failed, continuing: {e}")
                 written = 0
+                any_failure = True
             if written > 0:
                 any_new = True
                 did_work = True
-        if any_new:
+        if _idle_clock_should_advance(any_new, any_failure):
             state.write_progress("active_progress", round_no, now)
 
         if state.due("active_sim", ACTIVE_SIM_INTERVAL, now):
