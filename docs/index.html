@@ -320,15 +320,16 @@
               <th class="num" data-key="seed">Seed</th>
               <th class="num live-col" data-key="actualRank">Rank</th>
               <th data-key="name">Team</th>
-              <th class="num" data-key="rtg">Rating</th>
               <th class="num live-col" data-key="actualMp">MP</th>
+              <th class="num live-col" data-key="actualTb2">TB2</th>
               <th class="num live-col" data-key="actualGamePts">GP</th>
+              <th class="num live-col" data-key="actualTb4">TB4</th>
               <th class="num" data-key="pGold">Gold</th>
               <th class="num" data-key="pSilver">Silver</th>
               <th class="num" data-key="pBronze">Bronze</th>
               <th class="num" data-key="pAnyMedal">Any medal</th>
             </tr></thead>
-            <tbody id="lb-tbody"><tr><td colspan="10" class="empty-note">Loading standings…</td></tr></tbody>
+            <tbody id="lb-tbody"><tr><td colspan="11" class="empty-note">Loading standings…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -702,9 +703,10 @@
         el("td", { class: "num rank-cell" }, "#" + t.seed),
         el("td", { class: "num live-col" }, t.actualRank != null ? "#" + t.actualRank : "—"),
         el("td", {}, el("span", { class: "fed-chip" }, t.fed), el("span", { class: "team-name" }, t.name)),
-        el("td", { class: "num" }, String(t.rtg ?? "—")),
         el("td", { class: "num live-col" }, t.actualMp != null ? String(t.actualMp) : "—"),
+        el("td", { class: "num live-col" }, t.actualTb2 != null ? fmtTb(t.actualTb2) : "—"),
         el("td", { class: "num live-col" }, t.actualGamePts != null ? fmtGamePts(t.actualGamePts) : "—"),
+        el("td", { class: "num live-col" }, t.actualTb4 != null ? fmtTb(t.actualTb4) : "—"),
         el("td", { class: "num" }, fmtPct(t.pGold)),
         el("td", { class: "num" }, fmtPct(t.pSilver)),
         el("td", { class: "num" }, fmtPct(t.pBronze)),
@@ -712,7 +714,7 @@
       );
       tbody.append(tr);
     }
-    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 10, class: "empty-note" }, "No teams match your search.")));
+    if (!rows.length) tbody.append(el("tr", {}, el("td", { colspan: 11, class: "empty-note" }, "No teams match your search.")));
   }
   const lbHeaderLabels = new Map();
   document.querySelectorAll("#lb-table th[data-key]").forEach(th => {
