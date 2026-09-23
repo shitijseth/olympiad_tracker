@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 from chessolympiad.pairing.swiss_team import TeamPairingState, make_pairings
+from chessolympiad.simulate.board_tiebreak import MIN_GAMES_FOR_BOARD_MEDAL
 from chessolympiad.simulate.round import PlayerStat, TournamentState, apply_boundary_round, apply_pairings, apply_real_round
 from chessolympiad.simulate.tiebreak import compute_tiebreaks, rank_teams
 
@@ -219,7 +220,7 @@ def _simulate_chunk(
             category_medal_counts[tn] += 1
 
         for key, stat in state.player_stats.items():
-            if stat.games >= 8:
+            if stat.games >= MIN_GAMES_FOR_BOARD_MEDAL:
                 tpr = stat.opp_rating_sum / stat.games + 800.0 * (stat.score / stat.games - 0.5)
                 player_tpr_sum[key] = player_tpr_sum.get(key, 0.0) + tpr
                 player_tpr_n[key] = player_tpr_n.get(key, 0) + 1
@@ -228,10 +229,16 @@ def _simulate_chunk(
         if progress and (it + 1) % max(1, iterations // 10) == 0:
             progress(f"simulation {it + 1}/{iterations}")
 
-        # per-iteration board medals (top 3 TPR among players with >=8 games, per board_no)
+        # per-iteration board medals: top 3 TPR among eligible players
+        # (Article 4.6.3.1's >=8-games rule), per board_no. TPR ties within
+        # a single iteration are practically impossible (continuous
+        # float ratings + a random per-match shock), so Appendix 2.III's
+        # games-played tiebreak isn't applied here -- see
+        # chessolympiad.simulate.board_tiebreak for where it matters: the
+        # real (not simulated) standings, computed once, not per iteration.
         by_board: dict[int, list[tuple[float, tuple[int, int, str]]]] = {}
         for key, stat in state.player_stats.items():
-            if stat.games >= 8:
+            if stat.games >= MIN_GAMES_FOR_BOARD_MEDAL:
                 tpr = stat.opp_rating_sum / stat.games + 800.0 * (stat.score / stat.games - 0.5)
                 by_board.setdefault(stat.board_no, []).append((tpr, key))
         for board_no, entries in by_board.items():

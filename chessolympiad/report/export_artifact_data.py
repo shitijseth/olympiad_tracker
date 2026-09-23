@@ -16,6 +16,7 @@ from chessolympiad.data import db
 from chessolympiad.simulate.loader import load_real_rounds, load_rosters, load_teams
 from chessolympiad.simulate.real_standings import (
     compute_real_snapshot,
+    real_board_standings,
     real_pairings,
     real_player_stats,
     real_round_history,
@@ -96,6 +97,7 @@ def export_section(conn, tournament_id: str) -> dict:
     real_standings: dict[int, dict] = {}
     round_history: dict[int, list[dict]] = {}
     real_pstats: dict[tuple[int, int, str], dict] = {}
+    real_board_ranks: dict[int, list[dict]] = {}
     if real_rounds:
         typed_teams = load_teams(conn, tournament_id)
         snapshot_rosters = load_rosters(conn, tournament_id, adaptive=False)
@@ -105,6 +107,18 @@ def export_section(conn, tournament_id: str) -> dict:
         team_names = {tm.team_no: {"fed": tm.federation, "name": tm.team_name} for tm in typed_teams}
         round_history = real_round_history(conn, tournament_id, team_names)
         real_pstats = real_player_stats(snapshot_state)
+        real_board_ranks = real_board_standings(real_pstats, team_names)
+
+    # Reconstruct each ranked row's real_pstats key (player_key is derived
+    # the same way there) so the forecast-side loop below can attach
+    # "current actual rank" / "medal-eligible" to the same player it
+    # already merges actualTpr/actualGames onto, rather than needing a
+    # second independent lookup shape.
+    real_rank_by_key: dict[tuple[int, int, str], dict] = {}
+    for board_no, rows in real_board_ranks.items():
+        for row in rows:
+            k = (row["teamNo"], board_no, _player_key(row["fideId"], row["name"]))
+            real_rank_by_key[k] = {"eligible": row["eligible"], "actualRank": row["rank"]}
 
     # Attach each roster player's own real games/score/TPR so far -- not
     # just the per-board top-15 medal-chance list below, which only ever
@@ -176,12 +190,28 @@ def export_section(conn, tournament_id: str) -> dict:
                 "fed": row["federation"], "team": row["team_name"], "name": row["name"],
                 "tpr": round(row["expected_tpr"]), "pMedal": round(row["p_board_medal"], 4),
             }
-            real = real_pstats.get((row["team_no"], row["board_no"], row["player_key"]))
+            player_key = (row["team_no"], row["board_no"], row["player_key"])
+            real = real_pstats.get(player_key)
             if real and real["games"] > 0:
                 entry["actualGames"] = real["games"]
                 entry["actualScore"] = real["score"]
                 entry["actualTpr"] = real["tpr"]
+            rank_info = real_rank_by_key.get(player_key)
+            if rank_info:
+                entry["eligible"] = rank_info["eligible"]
+                entry["actualRank"] = rank_info["actualRank"]
             lst.append(entry)
+
+    # realBoardStandings: current actual (not simulated) board-medal
+    # standings per board_no "1".."5" -- "5" (the reserve/"best reserve"
+    # prize) has no simulated equivalent above at all (the Monte Carlo
+    # model doesn't track a substituting reserve's games under board 5),
+    # so this is the only source of reserve-board data, and the only
+    # place any board's ranking reflects Appendix 2.III's actual
+    # eligibility + tiebreak rule rather than forecast probability.
+    real_board_standings_out = {
+        str(board_no): rows[:15] for board_no, rows in real_board_ranks.items()
+    }
 
     ratings = [r["rating"] for r in conn.execute(
         "SELECT rating FROM players WHERE tournament_id=? AND rating IS NOT NULL AND rating>0", (tournament_id,)
@@ -212,6 +242,7 @@ def export_section(conn, tournament_id: str) -> dict:
         "iterations": run["iterations"],
         "teams": teams,
         "boards": boards,
+        "realBoardStandings": real_board_standings_out,
         "realRounds": real_rounds_for_replay(conn, tournament_id) if real_rounds else {},
         # Published pairings, independent of realRounds -- populated as soon
         # as chess-results.com posts a round's board assignments, even

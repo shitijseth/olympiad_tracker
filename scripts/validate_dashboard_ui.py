@@ -231,6 +231,13 @@ def run_checks(base_url: str):
         check("Rounds view shows 11 round buttons",
               page.locator("#round-switcher button").count() == 11)
 
+        page.click(".nav-btn[data-view='boards']")
+        page.wait_for_timeout(300)
+        boards_html = page.locator("#view-boards").inner_html()
+        check("Board medals shows a Best Reserve (board 5) card", "Best Reserve" in boards_html)
+        check("Board medals cites the FIDE regulation article for board prizes", "4.6.3" in boards_html)
+        check("Board medals shows medal-eligibility status (games/8)", "games" in boards_html.lower() or "Eligible" in boards_html)
+
         # Team detail: click through every single team row (not just one) --
         # a weak "does the view have >20 chars of text" check would pass even
         # on the empty-state placeholder text and miss a real rendering bug.

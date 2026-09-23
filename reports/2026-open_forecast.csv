@@ -1,3 +1,3 @@
 rank_by_medal_prob,federation,team_name,rating_avg,p_gold,p_silver,p_bronze,p_any_medal,p_category_medal,p_top8,p_top16,expected_rank,expected_match_pts,rank_std
-1,USA,Team 1,2500,1.0000,0.0000,0.0000,1.0000,0.0000,1.0000,1.0000,1.00,5.00,0.00
-2,USA,Team 2,2500,0.0000,1.0000,0.0000,1.0000,0.0000,1.0000,1.0000,2.00,1.00,0.00
+1,USA,Team 1,2500,1.0000,0.0000,0.0000,1.0000,0.0000,1.0000,1.0000,1.00,5.05,0.00
+2,USA,Team 2,2500,0.0000,1.0000,0.0000,1.0000,0.0000,1.0000,1.0000,2.00,0.95,0.00

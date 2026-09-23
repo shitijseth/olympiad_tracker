@@ -295,3 +295,49 @@ def real_player_stats(state: TournamentState) -> dict[tuple[int, int, str], dict
             "tpr": round(tpr) if tpr is not None else None,
         }
     return out
+
+
+def real_board_standings(
+    real_pstats: dict[tuple[int, int, str], dict], team_names: dict[int, dict]
+) -> dict[int, list[dict]]:
+    """Current real (not simulated) board-medal standings, per board_no
+    (1-4, plus 5 for the reserve/"best reserve" prize) -- FIDE Chess
+    Olympiad 2026 Regulations Article 4.6.3 + Appendix 2.III (see
+    reference/fide_olympiad_2026_regulations.md): ranked by performance
+    rating (TPR), ties broken by games played, eligibility requires at
+    least 8 games played. See chessolympiad.simulate.board_tiebreak for
+    the ranking rule itself.
+
+    Returns {board_no: [{"teamNo", "fed", "team", "fideId", "name",
+    "games", "tpr", "eligible", "rank"}, ...]}, eligible players first in
+    rank order, then ineligible players (rank=None) -- callers that only
+    want current medal contenders should filter on "eligible".
+    """
+    from chessolympiad.simulate.board_tiebreak import rank_board_players
+
+    by_board: dict[int, list[tuple[tuple[int, int, str], float, int]]] = {}
+    for key, s in real_pstats.items():
+        if s["tpr"] is None:
+            continue  # no games played at all -- not a candidate, eligible or otherwise
+        by_board.setdefault(s["boardNo"], []).append((key, s["tpr"], s["games"]))
+
+    out: dict[int, list[dict]] = {}
+    for board_no, entries in by_board.items():
+        ranked = rank_board_players(entries)
+        rows = []
+        for r in ranked:
+            s = real_pstats[r.key]
+            team_info = team_names.get(s["teamNo"], {})
+            rows.append({
+                "teamNo": s["teamNo"],
+                "fed": team_info.get("fed"),
+                "team": team_info.get("name"),
+                "fideId": s["fideId"],
+                "name": s["name"],
+                "games": s["games"],
+                "tpr": s["tpr"],
+                "eligible": r.eligible,
+                "rank": r.rank,
+            })
+        out[board_no] = rows
+    return out
