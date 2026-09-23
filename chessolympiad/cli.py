@@ -255,6 +255,7 @@ ACTIVE_SIM_INTERVAL = 300  # 5 min
 NOT_ACTIVE_FETCH_INTERVAL = 7200  # 2 hours
 FULL_REFRESH_INTERVAL = 79200  # ~22h, drifts earlier each day rather than later
 IDLE_TIMEOUT = 3600  # fall back to not-active if a round goes this long with no new lichess results
+RATE_LIMIT_COOLDOWN = 180  # after a real 429, skip lichess entirely for this long rather than re-tripping the limit on the very next tick
 
 
 def _idle_clock_should_advance(any_new: bool, any_failure: bool) -> bool:
@@ -299,6 +300,7 @@ def tick():
     import datetime as dt
 
     from chessolympiad import scheduler_state as state
+    from chessolympiad.data.lichess_client import RateLimited
     from chessolympiad.report.report import simulate_and_store, write_reports
     from chessolympiad.schedule import scheduled_round_for
 
@@ -320,16 +322,31 @@ def tick():
         typer.echo(f"tick: ACTIVE (round {round_no})")
         any_new = False
         any_failure = False
-        for section in TOURNAMENTS:
-            try:
-                written = _sync_lichess_only(section, typer.echo)
-            except Exception as e:  # noqa: BLE001 -- one section's transient failure (rate limit, network) must not block the other or crash the tick
-                typer.echo(f"WARN: {section} lichess sync failed, continuing: {e}")
-                written = 0
-                any_failure = True
-            if written > 0:
-                any_new = True
-                did_work = True
+        if state.due("lichess_cooldown", RATE_LIMIT_COOLDOWN, now):
+            for section in TOURNAMENTS:
+                try:
+                    written = _sync_lichess_only(section, typer.echo)
+                except RateLimited as e:
+                    # A real 429, not a network blip -- back off touching
+                    # lichess AT ALL (both sections; it's an IP-level limit,
+                    # not per-broadcast) for a real cooldown window instead
+                    # of immediately retrying on the very next 1-minute
+                    # tick, which just re-trips it without ever letting it
+                    # reset.
+                    typer.echo(f"WARN: {section} lichess rate-limited, cooling down {RATE_LIMIT_COOLDOWN}s: {e}")
+                    state.mark_done("lichess_cooldown", now)
+                    written = 0
+                    any_failure = True
+                except Exception as e:  # noqa: BLE001 -- one section's transient failure must not block the other or crash the tick
+                    typer.echo(f"WARN: {section} lichess sync failed, continuing: {e}")
+                    written = 0
+                    any_failure = True
+                if written > 0:
+                    any_new = True
+                    did_work = True
+        else:
+            typer.echo("tick: lichess still cooling down after a recent rate limit, skipping this tick's poll")
+            any_failure = True  # unknown, not confirmed-quiet -- see _idle_clock_should_advance
         if _idle_clock_should_advance(any_new, any_failure):
             state.write_progress("active_progress", round_no, now)
 

@@ -26,7 +26,13 @@ from typing import Optional
 import requests
 
 BASE = "https://lichess.org"
-TIMEOUT = 30
+# A healthy response normally lands in ~1-2s (measured directly against
+# the live broadcast); 30s let a single degraded request eat up to ~60s
+# (requests applies this to connect and read separately), and with several
+# sequential sub-broadcast requests per round that compounded into a
+# tick-stalling-for-many-minutes worst case in production. 10s still gives
+# real headroom over the normal case while capping that compounding.
+TIMEOUT = 10
 HEADERS = {"User-Agent": "ChessOlympiadPredictor/1.0 (contact: shitijseth@arizona.edu)"}
 REQUEST_DELAY_SECONDS = 1.0  # deliberately more conservative than chess-results.com's
 

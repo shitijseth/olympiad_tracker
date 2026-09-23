@@ -174,6 +174,81 @@ def test_sync_tournament_stops_at_first_unavailable_round(patched):
     assert sorted(r["round"] for r in rows) == [1, 2]  # never attempted round 3+ -- no sub-broadcast has reached it
 
 
+def test_an_abandoned_earlier_round_is_never_reprobed_once_a_later_round_completes(patched):
+    """The exact production regression: round 1 has one permanently-missing
+    board (a walkover/forfeit lichess never posts a result for), rounds 2-4
+    are fully decided, round 5 is genuinely in progress. sync_tournament_from_lichess
+    must probe ONLY round 5 -- re-probing round 1 forever wastes a full
+    round's worth of requests every single call for no possible new data,
+    and was a real, ongoing contributor to hitting lichess's rate limit.
+    """
+    conn, fetch_rounds, fetch_games = patched
+    # Round 1: 3 decided boards + 1 permanently stuck (no result), inserted
+    # directly -- this is pre-existing local state, not part of what's
+    # under test.
+    for board_no, result in [(1, "1-0"), (2, "0-1"), (3, "1-0"), (4, None)]:
+        conn.execute(
+            "INSERT INTO games (tournament_id, round, team_a_no, team_b_no, board_no, white_team_no, result) "
+            "VALUES (?,1,1,2,?,1,?)",
+            (TID, board_no, result),
+        )
+    # Rounds 2-4: fully decided.
+    for rd in (2, 3, 4):
+        for board_no in range(1, 5):
+            conn.execute(
+                "INSERT INTO games (tournament_id, round, team_a_no, team_b_no, board_no, white_team_no, result) "
+                "VALUES (?,?,1,2,?,1,'1-0')",
+                (TID, rd, board_no),
+            )
+    conn.commit()
+
+    known_rounds = {
+        "bcastA": [BroadcastRound(id="r5", number=5, finished=False)],
+        "bcastB": [BroadcastRound(id="r5b", number=5, finished=False)],
+    }
+    fetch_rounds.side_effect = lambda bid: known_rounds[bid]
+    fetch_games.side_effect = lambda round_id: [_game("Uzbekistan", "Turkiye", "P1", "P2", "1-0")]
+
+    total = ls.sync_tournament_from_lichess(conn, TID, SECTION, num_rounds=5)
+
+    assert total > 0
+    fetched_round_ids = [call.args[0] for call in fetch_games.call_args_list]
+    assert fetched_round_ids == ["r5", "r5b"], (
+        f"expected only round 5's broadcasts to be probed, got {fetched_round_ids} -- "
+        "round 1's permanently-stuck board must not be re-fetched forever"
+    )
+
+
+def test_sync_stops_early_once_the_wall_clock_budget_is_exceeded(patched, monkeypatch):
+    """Defense in depth alongside the abandoned-round fix: even if several
+    published rounds genuinely need probing, the whole call must not run
+    past its budget regardless of how many rounds/sub-broadcasts or how
+    slow any single request is -- this is what actually bounds a sync
+    call's worst case, rather than relying on request counts staying low.
+    """
+    import time as time_mod
+
+    conn, fetch_rounds, fetch_games = patched
+    monkeypatch.setattr(ls, "SYNC_BUDGET_SECONDS", 0.05)
+
+    known_rounds = {
+        "bcastA": [BroadcastRound(id="r1", number=1, finished=False), BroadcastRound(id="r2", number=2, finished=False)],
+        "bcastB": [],
+    }
+    fetch_rounds.side_effect = lambda bid: known_rounds[bid]
+
+    def slow_games(round_id):
+        time_mod.sleep(0.06)  # exceeds the (patched) whole-call budget after just one request
+        return [_game("Uzbekistan", "Turkiye", "P1", "P2", "1-0")]
+
+    fetch_games.side_effect = slow_games
+
+    ls.sync_tournament_from_lichess(conn, TID, SECTION, num_rounds=5)
+
+    fetched_rounds = [r["round"] for r in conn.execute("SELECT DISTINCT round FROM games WHERE tournament_id=?", (TID,)).fetchall()]
+    assert fetched_rounds == [1], f"expected only round 1 before the budget tripped, got {fetched_rounds}"
+
+
 def test_second_call_skips_a_now_fully_decided_round(patched):
     conn, fetch_rounds, fetch_games = patched
     fetch_rounds.side_effect = lambda bid: (

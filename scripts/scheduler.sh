@@ -32,15 +32,18 @@ PY=.venv/bin/python
 # A tick should never legitimately run anywhere near this long -- the
 # worst normal case is both sections needing their 5-min resimulation AND
 # their once-per-round 20000-iteration/1-worker deep run in the same
-# cycle, comfortably under 15 minutes even on a loaded machine. This
-# exists purely to recover from a genuine hang (seen once in production:
-# a lichess network call stalled indefinitely under host memory pressure)
-# rather than to bound normal operation -- without it, a hung tick holds
-# LOCK forever and silently freezes the whole pipeline, since every later
-# cron invocation just sees the lock and skips.
+# cycle, comfortably under 15 minutes even on a loaded machine. Lichess
+# syncing itself is now bounded well under a minute per section
+# (SYNC_BUDGET_SECONDS in lichess_sync.py + a shorter per-request timeout
+# -- see that file's history for the production stall this fixed at the
+# root instead of just here). This timeout is what's left as defense in
+# depth for anything else that could still hang (e.g. a stuck subprocess)
+# -- without it, a hung tick holds LOCK forever and silently freezes the
+# whole pipeline, since every later cron invocation just sees the lock and
+# skips.
 TICK_TIMEOUT=1800
 TICK_OUT=$(mktemp)
-$PY -m chessolympiad.cli tick > "$TICK_OUT" 2>&1 &
+PYTHONUNBUFFERED=1 $PY -m chessolympiad.cli tick > "$TICK_OUT" 2>&1 &
 TICK_PID=$!
 waited=0
 while kill -0 "$TICK_PID" 2>/dev/null; do

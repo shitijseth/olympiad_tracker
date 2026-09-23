@@ -29,7 +29,13 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE = "https://chess-results.com/tnr{tnr}.aspx"
-TIMEOUT = 30
+# Reduced from 30s: a single degraded request could otherwise eat up to
+# ~60s (requests applies this to connect and read separately), and the
+# not-active cadence's "always probe the next round" behavior means this
+# runs unattended every 2h regardless -- no need to wait that long before
+# treating a slow response as failed for this cycle (see lichess_client.py
+# for the same reasoning, applied there after an actual production stall).
+TIMEOUT = 15
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ChessOlympiadPredictor/1.0)"}
 REQUEST_DELAY_SECONDS = 0.15  # be a polite citizen of a shared public results server
 

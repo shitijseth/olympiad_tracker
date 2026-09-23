@@ -12,6 +12,7 @@ rosters (chessolympiad.data.sync.sync_tournament with fetch_round_results=False)
 from __future__ import annotations
 
 import re
+import time
 import unicodedata
 
 from chessolympiad.data import db
@@ -149,12 +150,26 @@ def _group_into_games_rows(
     return rows
 
 
-def sync_round_from_lichess(conn, tournament_id: str, section: str, round_no: int, progress=None) -> int:
+# A live-cadence lichess sync should never legitimately need this long --
+# caps the whole tournament sync's worst case regardless of how many
+# rounds/sub-broadcasts are in play or how slow any single request is.
+# This is defense in depth, not the primary fix: the primary fix is not
+# re-probing an abandoned round at all (see sync_tournament_from_lichess).
+SYNC_BUDGET_SECONDS = 45
+
+
+def sync_round_from_lichess(conn, tournament_id: str, section: str, round_no: int, progress=None, deadline: float | None = None) -> int:
     """Sync one round's board results from every sub-broadcast covering
     this section. Returns the number of boards written (0 if nothing new
     -- either no sub-broadcast has reached this round yet, or it's already
     fully decided locally and skipped via the same _complete_rounds check
     chess-results-sourced rounds use).
+
+    `deadline` (a time.monotonic() timestamp) stops issuing further
+    fetch_round_games calls once passed, returning whatever was gathered
+    so far -- a round can span several sub-broadcasts, and this is what
+    actually bounds a single round's worst-case time when the deadline is
+    reached mid-round rather than only checked between rounds.
     """
     from chessolympiad.data.sync import _complete_rounds  # local import: avoid a cycle at module load
 
@@ -171,6 +186,10 @@ def sync_round_from_lichess(conn, tournament_id: str, section: str, round_no: in
     for round_id, (_broadcast_id, num, _finished) in round_map.items():
         if num != round_no:
             continue
+        if deadline is not None and time.monotonic() > deadline:
+            if progress:
+                progress(f"{tournament_id}: lichess sync budget exceeded mid-round {round_no}, stopping early this cycle")
+            break
         raw_games = lc.fetch_round_games(round_id)
         game_rows.extend(_group_into_games_rows(raw_games, teams, tournament_id, round_no))
 
@@ -187,19 +206,35 @@ def sync_round_from_lichess(conn, tournament_id: str, section: str, round_no: in
 
 
 def sync_tournament_from_lichess(conn, tournament_id: str, section: str, num_rounds: int, progress=None) -> int:
-    """Sync every not-yet-complete round, 1..num_rounds, stopping at the
-    first round no sub-broadcast has reached yet (mirrors sync.py's own
-    round loop) -- a not-yet-known round is always probed regardless of
-    the official schedule, same reasoning as sync.py's module docstring.
+    """Sync every not-yet-complete round AFTER the highest already-complete
+    one, stopping at the first round no sub-broadcast has reached yet
+    (mirrors sync.py's own round loop) -- a not-yet-known round is always
+    probed regardless of the official schedule, same reasoning as sync.py's
+    module docstring.
+
+    Deliberately NOT "every incomplete round from 1": a round can have one
+    permanently-missing board (a walkover/forfeit lichess never gets a
+    result for) long after the tournament has moved past it. Re-probing
+    that forever wastes a full round's worth of requests (up to 5
+    sub-broadcasts) on every single call for no possible new data -- this
+    was a real, ongoing contributor to hitting lichess's rate limit and to
+    a sync call's worst-case duration. Once a later round has completed,
+    an earlier incomplete one is abandoned, not in progress.
     """
     from chessolympiad.data.sync import _complete_rounds  # local import: avoid a cycle at module load
 
     complete_rounds = _complete_rounds(conn, tournament_id)
+    max_complete = max(complete_rounds, default=0)
+    deadline = time.monotonic() + SYNC_BUDGET_SECONDS
     total = 0
-    for round_no in range(1, num_rounds + 1):
+    for round_no in range(max_complete + 1, num_rounds + 1):
         if round_no in complete_rounds:
             continue  # can't change -- but later rounds might still have new data, keep going
-        written = sync_round_from_lichess(conn, tournament_id, section, round_no, progress=progress)
+        if time.monotonic() > deadline:
+            if progress:
+                progress(f"{tournament_id}: lichess sync budget ({SYNC_BUDGET_SECONDS}s) exceeded, stopping early this cycle")
+            break
+        written = sync_round_from_lichess(conn, tournament_id, section, round_no, progress=progress, deadline=deadline)
         total += written
         if written == 0:
             break  # no sub-broadcast has reached this round yet
