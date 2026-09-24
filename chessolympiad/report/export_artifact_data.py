@@ -34,13 +34,24 @@ def _latest_run(conn, tournament_id: str) -> dict | None:
 
 
 def _medal_history(conn, tournament_id: str) -> dict[int, list[dict]]:
-    """Each team's medal-probability forecast at every round milestone
-    reached so far, for the Team Detail page's forecast-over-time chart.
-    One point per distinct as_of_round value, taken from the latest run
-    recorded at that milestone (many runs can share an as_of_round --
-    every recurring cycle before the next round completes, plus a lot of
-    historical manual testing at varying iteration counts -- the most
-    recent one is the best-quality, most current estimate for that point).
+    """Each team's medal-probability forecast FROZEN at the moment each
+    round milestone was first reached, for the Team Detail page's
+    forecast-over-time chart. One point per distinct as_of_round value,
+    taken from the FIRST run recorded at that milestone.
+
+    Deliberately MIN(run_id), not MAX: as_of_round stays at N for every
+    run between round N completing and round N+1 completing (the active
+    cadence resimulates every 5 min in between, each still informed by
+    round N+1's live boundary-round progress) -- taking the latest one
+    would silently keep overwriting round N's own point with round N+1's
+    still-in-progress numbers, so round N would never get to keep a
+    stable dot of its own once round N+1 started (a real bug: the chart
+    visibly lost round 7's point the moment round 8 began). The FIRST run
+    at as_of_round=N is the one struck right as round N finished, before
+    any later round's data could influence it -- exactly what "this
+    round's milestone" should mean. The live, still-moving current
+    estimate is appended separately below, tagged with its own round
+    number, not overloaded onto a milestone's frozen value.
     """
     rows = conn.execute(
         """
@@ -49,7 +60,7 @@ def _medal_history(conn, tournament_id: str) -> dict[int, list[dict]]:
         JOIN team_forecasts tf ON tf.run_id = sr.run_id
         WHERE sr.tournament_id = ?
           AND sr.run_id = (
-              SELECT MAX(sr2.run_id) FROM simulation_runs sr2
+              SELECT MIN(sr2.run_id) FROM simulation_runs sr2
               WHERE sr2.tournament_id = sr.tournament_id AND sr2.as_of_round = sr.as_of_round
           )
         ORDER BY sr.as_of_round
@@ -149,6 +160,22 @@ def export_section(conn, tournament_id: str) -> dict:
     ):
         standing = real_standings.get(r["team_no"])
         team_round_results = round_history.get(r["team_no"], [])
+        team_medal_history = medal_history.get(r["team_no"], [])
+        last_milestone_round = team_medal_history[-1]["round"] if team_medal_history else 0
+        if live_round > last_milestone_round:
+            # The round in progress hasn't finished for every team yet, so
+            # it has no frozen milestone of its own -- append the CURRENT
+            # run's value (already informed by this round's boundary-round
+            # progress) as a live, still-moving point at its own round
+            # number, distinct from any past milestone's now-permanent one.
+            team_medal_history = team_medal_history + [{
+                "round": live_round,
+                "pGold": round(r["p_gold"], 4),
+                "pSilver": round(r["p_silver"], 4),
+                "pBronze": round(r["p_bronze"], 4),
+                "pAnyMedal": round(r["p_any_medal"], 4),
+                "live": True,  # not a frozen milestone -- still moving as this round's results come in
+            }]
         teams.append({
             "no": r["team_no"], "fed": r["federation"], "name": r["team_name"],
             "rtg": r["rating_avg"], "captain": r["captain"], "seed": r["initial_rank"],
@@ -171,7 +198,7 @@ def export_section(conn, tournament_id: str) -> dict:
             "actualTb4": standing["tb"][2] if standing else None,
             "actualGamePts": round(sum(rr["ownGamePts"] for rr in team_round_results), 1) if team_round_results else None,
             "roundResults": team_round_results,
-            "medalHistory": medal_history.get(r["team_no"], []),
+            "medalHistory": team_medal_history,
         })
 
     boards: dict[str, list[dict]] = {}
