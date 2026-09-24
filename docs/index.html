@@ -1079,16 +1079,12 @@
     const names = { "1": "Board 1", "2": "Board 2", "3": "Board 3", "4": "Board 4", "5": "Best Reserve" };
     Object.keys(names).forEach(k => grid.append(k === "5" ? reserveBoardCard(d, names[k]) : forecastBoardCard(d, k, names[k])));
   }
-  function gamesCell(games, eligible) {
-    if (games == null) return "—";
-    return eligible ? String(games) : `${games} (needs 8)`;
-  }
   function forecastBoardCard(d, k, label) {
     const rows = (d.boards[k] || []).slice(0, 15);
     const card = el("div", { class: "panel", style: "margin-bottom:0;" },
       el("div", { class: "panel-head" },
         el("div", {}, el("h2", {}, label),
-          el("div", { class: "panel-sub" }, "Simulated medal chance, plus actual TPR so far (FIDE Regulations Article 4.6.3: min. 8 games to be medal-eligible)")),
+          el("div", { class: "panel-sub" }, "Simulated medal chance, plus actual TPR so far — min. 8 games to be medal-eligible (FIDE Regulations Article 4.6.3)")),
         el("div", { class: "meta" }, rows.length ? `Top ${rows.length}` : "")));
     const table = el("table", {},
       el("thead", {}, el("tr", {},
@@ -1097,6 +1093,7 @@
         el("th", {}, "Federation"),
         el("th", { class: "num" }, "Forecast TPR"),
         el("th", { class: "num live-col" }, "Actual TPR"),
+        el("th", { class: "num live-col" }, "Points"),
         el("th", { class: "num live-col" }, "Games"),
         el("th", { class: "num" }, "Medal chance"),
       )),
@@ -1109,7 +1106,8 @@
         el("td", {}, el("span", { class: "fed-chip" }, p.fed), p.team),
         el("td", { class: "num" }, String(p.tpr)),
         el("td", { class: "num live-col" }, p.actualTpr != null ? String(p.actualTpr) : "—"),
-        el("td", { class: "num live-col" }, gamesCell(p.actualGames, p.eligible)),
+        el("td", { class: "num live-col" }, p.actualScore != null ? fmtGamePts(p.actualScore) : "—"),
+        el("td", { class: "num live-col" }, p.actualGames != null ? String(p.actualGames) : "—"),
         el("td", { class: "num" }, fmtPct(p.pMedal))));
     });
     if (!rows.length) card.append(el("p", { class: "empty-note" }, "Not enough simulated 8+ game samples yet."));
@@ -1121,7 +1119,7 @@
     const card = el("div", { class: "panel", style: "margin-bottom:0;" },
       el("div", { class: "panel-head" },
         el("div", {}, el("h2", {}, label),
-          el("div", { class: "panel-sub" }, "Actual TPR so far — no simulated forecast for reserves (FIDE Regulations Article 4.6.3: min. 8 games to be medal-eligible)")),
+          el("div", { class: "panel-sub" }, "Actual TPR so far — no simulated forecast for reserves — min. 8 games to be medal-eligible (FIDE Regulations Article 4.6.3)")),
         el("div", { class: "meta" }, rows.length ? `Top ${rows.length}` : "")));
     const table = el("table", {},
       el("thead", {}, el("tr", {},
@@ -1129,6 +1127,7 @@
         el("th", {}, "Player"),
         el("th", {}, "Federation"),
         el("th", { class: "num" }, "TPR"),
+        el("th", { class: "num" }, "Points"),
         el("th", { class: "num" }, "Games"),
       )),
       el("tbody"));
@@ -1139,7 +1138,8 @@
         el("td", {}, el("span", { class: "team-name" }, p.name)),
         el("td", {}, el("span", { class: "fed-chip" }, p.fed), p.team),
         el("td", { class: "num" }, String(p.tpr)),
-        el("td", { class: "num" }, gamesCell(p.games, p.eligible))));
+        el("td", { class: "num" }, fmtGamePts(p.score)),
+        el("td", { class: "num" }, String(p.games))));
     });
     if (!rows.length) card.append(el("p", { class: "empty-note" }, "No real games recorded for this board yet."));
     else card.append(el("div", { class: "table-wrap" }, table));

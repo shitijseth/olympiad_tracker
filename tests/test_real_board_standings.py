@@ -28,6 +28,7 @@ def test_ranks_within_a_board_by_tpr_and_merges_team_info():
     assert [r["name"] for r in board1] == ["Alice", "Bob"]
     assert board1[0]["rank"] == 1 and board1[0]["fed"] == "USA" and board1[0]["team"] == "United States"
     assert board1[1]["rank"] == 2
+    assert board1[0]["score"] == 4.5  # games=9 -> score=games/2 per the _pstat fixture
 
 
 def test_boards_are_kept_separate():

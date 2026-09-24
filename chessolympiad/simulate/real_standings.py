@@ -309,9 +309,9 @@ def real_board_standings(
     the ranking rule itself.
 
     Returns {board_no: [{"teamNo", "fed", "team", "fideId", "name",
-    "games", "tpr", "eligible", "rank"}, ...]}, eligible players first in
-    rank order, then ineligible players (rank=None) -- callers that only
-    want current medal contenders should filter on "eligible".
+    "games", "score", "tpr", "eligible", "rank"}, ...]}, eligible players
+    first in rank order, then ineligible players (rank=None) -- callers
+    that only want current medal contenders should filter on "eligible".
     """
     from chessolympiad.simulate.board_tiebreak import rank_board_players
 
@@ -335,6 +335,7 @@ def real_board_standings(
                 "fideId": s["fideId"],
                 "name": s["name"],
                 "games": s["games"],
+                "score": s["score"],
                 "tpr": s["tpr"],
                 "eligible": r.eligible,
                 "rank": r.rank,
