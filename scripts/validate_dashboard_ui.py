@@ -236,7 +236,9 @@ def run_checks(base_url: str):
         boards_html = page.locator("#view-boards").inner_html()
         check("Board medals shows a Best Reserve (board 5) card", "Best Reserve" in boards_html)
         check("Board medals cites the FIDE regulation article for board prizes", "4.6.3" in boards_html)
-        check("Board medals shows medal-eligibility status (games/8)", "games" in boards_html.lower() or "Eligible" in boards_html)
+        check("Board medals shows medal-eligibility status for players under 8 games", "needs 8" in boards_html)
+        check("Board medals shows exactly one table per board (no duplicate panels)",
+              page.locator("#boards-grid .panel").count() == 5, f"got {page.locator('#boards-grid .panel').count()}")
 
         # Team detail: click through every single team row (not just one) --
         # a weak "does the view have >20 chars of text" check would pass even

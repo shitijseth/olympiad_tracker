@@ -307,7 +307,6 @@ def run_checks(base_url: str):
         page.wait_for_timeout(300)
         boards_text = page.locator("#view-boards").inner_text().lower()
         check("Board medals shows Actual TPR column with data", "actual tpr" in boards_text)
-        check("Board medals shows a Points column with data", "points" in boards_text)
         check("Board medals shows a Games column with data", "games" in boards_text)
 
         # Simulate tab: should start past the real rounds already ingested.
