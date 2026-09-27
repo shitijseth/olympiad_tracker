@@ -1,6 +1,6 @@
 # Forecast: 2026-women
 
-as_of_round=10, iterations=5000
+as_of_round=11, iterations=20000
 
 | # | Fed | Team | Rtg | Gold% | Silver% | Bronze% | Any Medal% | Top8% | Exp.Rank |
 |---|---|---|---|---|---|---|---|---|---|
