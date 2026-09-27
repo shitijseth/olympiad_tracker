@@ -629,7 +629,11 @@
   function renderChartMedals(d) {
     const n = parseInt(document.getElementById("lb-topn").value, 10);
     document.getElementById("lb-topn-val").textContent = n;
-    const teams = d.teams.slice(0, n);
+    // Selection (which N teams) stays by any-medal chance; display order is
+    // gold chance first, then silver, then bronze -- reads as a podium
+    // order instead of a mix, especially once medals are effectively
+    // decided (100%/0% probabilities).
+    const teams = d.teams.slice(0, n).sort((a, b) => (b.pGold - a.pGold) || (b.pSilver - a.pSilver) || (b.pBronze - a.pBronze));
     const host = document.getElementById("chart-medals");
     const labelFont = 18;
     const w = chartWidth(host, 960), h = 420, padL = 56, padB = 56, padT = 20, padR = 12;
