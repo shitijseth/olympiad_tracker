@@ -582,8 +582,20 @@
     const decided = matches.filter(m => m.hasResults).length;
     return decided < matches.length ? ` (${decided}/${matches.length} matches decided)` : "";
   }
+  // Shared final tiebreak for any forecast-probability sort below: once a
+  // round finishes, probabilities routinely collapse to exact ties (many
+  // teams at ~100%/~0%), and comparing only the probability itself would
+  // leave those ties in arbitrary array order. Falls back to the real,
+  // rule-computed standing (actualRank, ascending -- lower is better;
+  // teams with no real rank yet sort last) and finally any-medal chance,
+  // so a tie never looks arbitrary.
+  function medalTiebreak(a, b) {
+    const ar = a.actualRank ?? Infinity, br = b.actualRank ?? Infinity;
+    if (ar !== br) return ar - br;
+    return b.pAnyMedal - a.pAnyMedal;
+  }
   function renderTiles(d) {
-    const topGold = [...d.teams].sort((a, b) => b.pGold - a.pGold).slice(0, 3);
+    const topGold = [...d.teams].sort((a, b) => (b.pGold - a.pGold) || medalTiebreak(a, b)).slice(0, 3);
     const wrap = document.getElementById("lb-tiles");
     wrap.innerHTML = "";
     const favoritesTile = el(
@@ -633,7 +645,7 @@
     // gold chance first, then silver, then bronze -- reads as a podium
     // order instead of a mix, especially once medals are effectively
     // decided (100%/0% probabilities).
-    const teams = d.teams.slice(0, n).sort((a, b) => (b.pGold - a.pGold) || (b.pSilver - a.pSilver) || (b.pBronze - a.pBronze));
+    const teams = d.teams.slice(0, n).sort((a, b) => (b.pGold - a.pGold) || (b.pSilver - a.pSilver) || (b.pBronze - a.pBronze) || medalTiebreak(a, b));
     const host = document.getElementById("chart-medals");
     const labelFont = 18;
     const w = chartWidth(host, 960), h = 420, padL = 56, padB = 56, padT = 20, padR = 12;
