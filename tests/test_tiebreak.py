@@ -1,4 +1,4 @@
-from chessolympiad.simulate.tiebreak import RoundRecord, compute_tiebreaks, rank_teams
+from chessolympiad.simulate.tiebreak import RoundRecord, compute_ranks, compute_tiebreaks, rank_teams
 
 
 def test_hand_computed_is10_two_opponents():
@@ -34,3 +34,44 @@ def test_rank_teams_orders_by_match_points_then_tiebreaks():
     tiebreaks = {1: (10.0, 5.0, 3.0), 2: (12.0, 4.0, 2.0), 3: (0.0, 0.0, 0.0)}
     ranking = rank_teams(match_points, tiebreaks)
     assert ranking == [2, 1, 3]  # team 2 wins the MP tie via higher TB1
+
+
+def test_compute_ranks_gives_strictly_ordered_teams_sequential_ranks():
+    match_points = {1: 8, 2: 8, 3: 6}
+    tiebreaks = {1: (10.0, 5.0, 3.0), 2: (12.0, 4.0, 2.0), 3: (0.0, 0.0, 0.0)}
+    ranks = compute_ranks(match_points, tiebreaks)
+    assert ranks == {2: 1, 1: 2, 3: 3}
+
+
+def test_compute_ranks_gives_genuinely_tied_teams_the_same_rank():
+    # Annex 2.I: "Any ties unbroken after the application of TB3 shall
+    # remain tied, and the tied teams shall be assigned the top ranking
+    # of that set of teams." Teams 1 and 2 are identical on MP and all
+    # three tiebreaks -- both must get rank 1, and team 3 (clearly next)
+    # must get rank 3, not 2 (skipping ahead by the tied group's size).
+    match_points = {1: 8, 2: 8, 3: 6}
+    tiebreaks = {1: (10.0, 5.0, 3.0), 2: (10.0, 5.0, 3.0), 3: (0.0, 0.0, 0.0)}
+    ranks = compute_ranks(match_points, tiebreaks)
+    assert ranks[1] == ranks[2] == 1
+    assert ranks[3] == 3
+
+
+def test_compute_ranks_handles_a_tie_in_the_middle_of_the_field():
+    match_points = {1: 10, 2: 8, 3: 8, 4: 6}
+    tiebreaks = {
+        1: (20.0, 10.0, 5.0),
+        2: (5.0, 5.0, 5.0),
+        3: (5.0, 5.0, 5.0),  # tied with team 2
+        4: (0.0, 0.0, 0.0),
+    }
+    ranks = compute_ranks(match_points, tiebreaks)
+    assert ranks[1] == 1
+    assert ranks[2] == ranks[3] == 2
+    assert ranks[4] == 4  # skips rank 3 -- two teams already hold rank 2
+
+
+def test_compute_ranks_with_no_ties_at_all_matches_a_plain_enumerate():
+    match_points = {1: 10, 2: 8, 3: 6, 4: 4}
+    tiebreaks = {1: (3.0, 0, 0), 2: (2.0, 0, 0), 3: (1.0, 0, 0), 4: (0.0, 0, 0)}
+    ranks = compute_ranks(match_points, tiebreaks)
+    assert ranks == {1: 1, 2: 2, 3: 3, 4: 4}

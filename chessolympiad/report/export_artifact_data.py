@@ -201,33 +201,53 @@ def export_section(conn, tournament_id: str) -> dict:
             "medalHistory": team_medal_history,
         })
 
-    boards: dict[str, list[dict]] = {}
+    # Re-sort after building: SQL's ORDER BY p_any_medal DESC alone leaves
+    # ties (routine once a round finishes and many teams' probabilities
+    # collapse to exactly 0%/100%) in arbitrary row order. Fall back to the
+    # real, rule-computed standing (actualRank -- lower is better; teams
+    # with none yet sort last) and then forecast expected rank, so a tie
+    # is never displayed in a meaningless order.
+    teams.sort(key=lambda t: (-t["pAnyMedal"], t["actualRank"] if t["actualRank"] is not None else float("inf"), t["expRank"]))
+
+    # Collect every candidate per board first (not just a streaming top-15)
+    # so ties in p_board_medal -- routine once the event is basically
+    # decided, when many players are simultaneously pinned at ~100% or ~0%
+    # -- can be broken by TPR before truncating, rather than left in
+    # whatever order SQLite happens to return for the tie (a real bug: a
+    # lower-actual-TPR player displayed above a higher-actual-TPR one,
+    # despite TPR being the one thing Article 4.6.3.2 actually ranks by).
+    # Actual TPR is preferred over the simulated forecast TPR for this
+    # tiebreak since it's ground truth, not an estimate, once real games
+    # exist; forecast TPR is the fallback pre-event/early on.
+    boards_raw: dict[str, list[dict]] = {}
     for row in conn.execute(
         """
         SELECT pf.*, t.federation, t.team_name FROM player_forecasts pf
         JOIN teams t ON t.tournament_id=? AND t.team_no=pf.team_no
-        WHERE pf.run_id=? ORDER BY pf.board_no, pf.p_board_medal DESC
+        WHERE pf.run_id=?
         """,
         (tournament_id, run["run_id"]),
     ):
-        key = str(row["board_no"])
-        lst = boards.setdefault(key, [])
-        if len(lst) < 15:
-            entry = {
-                "fed": row["federation"], "team": row["team_name"], "name": row["name"],
-                "tpr": round(row["expected_tpr"]), "pMedal": round(row["p_board_medal"], 4),
-            }
-            player_key = (row["team_no"], row["board_no"], row["player_key"])
-            real = real_pstats.get(player_key)
-            if real and real["games"] > 0:
-                entry["actualGames"] = real["games"]
-                entry["actualScore"] = real["score"]
-                entry["actualTpr"] = real["tpr"]
-            rank_info = real_rank_by_key.get(player_key)
-            if rank_info:
-                entry["eligible"] = rank_info["eligible"]
-                entry["actualRank"] = rank_info["actualRank"]
-            lst.append(entry)
+        entry = {
+            "fed": row["federation"], "team": row["team_name"], "name": row["name"],
+            "tpr": round(row["expected_tpr"]), "pMedal": round(row["p_board_medal"], 4),
+        }
+        player_key = (row["team_no"], row["board_no"], row["player_key"])
+        real = real_pstats.get(player_key)
+        if real and real["games"] > 0:
+            entry["actualGames"] = real["games"]
+            entry["actualScore"] = real["score"]
+            entry["actualTpr"] = real["tpr"]
+        rank_info = real_rank_by_key.get(player_key)
+        if rank_info:
+            entry["eligible"] = rank_info["eligible"]
+            entry["actualRank"] = rank_info["actualRank"]
+        boards_raw.setdefault(str(row["board_no"]), []).append(entry)
+
+    boards: dict[str, list[dict]] = {}
+    for key, entries in boards_raw.items():
+        entries.sort(key=lambda e: (e["pMedal"], e.get("actualTpr", e["tpr"])), reverse=True)
+        boards[key] = entries[:15]
 
     # realBoardStandings: current actual (not simulated) board-medal
     # standings per board_no "1".."5" -- "5" (the reserve/"best reserve"

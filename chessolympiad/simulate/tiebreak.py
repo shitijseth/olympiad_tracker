@@ -95,3 +95,38 @@ def rank_teams(
         match_points.keys(),
         key=lambda t: (-match_points[t], -tiebreaks[t][0], -tiebreaks[t][1], -tiebreaks[t][2]),
     )
+
+
+def compute_ranks(
+    match_points: dict[int, int],
+    tiebreaks: dict[int, tuple[float, float, float]],
+) -> dict[int, int]:
+    """Team -> official rank per Annex 2.I, with genuinely tied teams
+    (identical match points AND all three tiebreaks) sharing the same
+    rank number -- "any ties unbroken after the application of TB3 shall
+    remain tied, and the tied teams shall be assigned the top ranking of
+    that set of teams" -- rather than the arbitrary strictly-increasing
+    position a plain enumerate() over rank_teams()'s order would give.
+    The next distinct team's rank skips ahead by the tied group's size
+    (e.g. two teams tied at rank 5 -> the next team is rank 7, not 6),
+    matching how a real standings list numbers ties.
+
+    Not used inside run_monte_carlo's hot loop (see tournament.py): a
+    Monte Carlo iteration's continuous, randomly-shocked ratings make an
+    exact tie on all three tiebreaks practically impossible there, so
+    rank_teams()'s plain ordered list is sufficient and cheaper for that
+    per-iteration use. This function is for real (not simulated) team
+    standings, where genuine ties are common, especially once a section
+    finishes.
+    """
+    ordered = rank_teams(match_points, tiebreaks)
+    ranks: dict[int, int] = {}
+    rank = 0
+    prev_key = None
+    for i, team_no in enumerate(ordered):
+        key = (match_points[team_no], tiebreaks[team_no])
+        if key != prev_key:
+            rank = i + 1
+            prev_key = key
+        ranks[team_no] = rank
+    return ranks

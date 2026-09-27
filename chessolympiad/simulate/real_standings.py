@@ -18,7 +18,7 @@ import sqlite3
 
 from chessolympiad.pairing.swiss_team import TeamPairingState
 from chessolympiad.simulate.round import TournamentState, apply_real_round
-from chessolympiad.simulate.tiebreak import compute_tiebreaks, rank_teams
+from chessolympiad.simulate.tiebreak import compute_ranks, compute_tiebreaks
 from chessolympiad.simulate.tournament import RealRoundData, TeamInfo
 
 
@@ -50,8 +50,7 @@ def compute_real_snapshot(
         return state, {}
 
     tiebreaks = compute_tiebreaks(state.history, state.match_points)
-    ranking = rank_teams(state.match_points, tiebreaks)
-    rank_pos = {team_no: i + 1 for i, team_no in enumerate(ranking)}
+    rank_pos = compute_ranks(state.match_points, tiebreaks)
     standings = {
         team_no: {"mp": state.match_points[team_no], "rank": rank_pos[team_no], "tb": list(tiebreaks[team_no])}
         for team_no in state.match_points
